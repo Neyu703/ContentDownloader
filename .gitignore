@@ -1,0 +1,55 @@
+# dependencies
+node_modules/
+
+# builds / output
+dist/
+build/
+web-build/
+*.tsbuildinfo
+
+# Expo
+.expo/
+expo-env.d.ts
+
+# Android native
+android/build/
+android/app/build/
+android/.gradle/
+android/.kotlin/
+android/.cxx/
+android/local.properties
+*.iml
+
+# signing / keys
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# server runtime
+downloads/
+logs/
+
+# logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# Claude / agent config (never commit)
+.claude/
+CLAUDE.md
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

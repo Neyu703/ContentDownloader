@@ -1,0 +1,9 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // Lets tsc (and the editor) resolve ./downloader to index.native.ts / index.web.ts, the same
+    // platform-extension resolution Metro already does at bundle time.
+    "moduleSuffixes": [".native", ".web", ""]
+  }
+}

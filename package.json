@@ -1,0 +1,11 @@
+{
+  "name": "content-downloader",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev:app": "pnpm --filter app web",
+    "dev:server": "pnpm --filter server dev",
+    "build:server": "pnpm --filter server build",
+    "control": "node control-panel.js"
+  }
+}

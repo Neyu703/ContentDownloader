@@ -1,0 +1,7 @@
+{
+  "name": "ytdlp",
+  "version": "1.0.0",
+  "description": "On-device yt-dlp download queue for Android",
+  "main": "index.ts",
+  "private": true
+}
