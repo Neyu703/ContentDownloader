@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { errorMessage } from "./utils.js";
 
 export const DOWNLOADS_DIR = path.join(process.cwd(), "downloads");
 export const LOGS_DIR = path.join(process.cwd(), "logs");
@@ -141,7 +142,9 @@ export async function checkEnvironment(): Promise<void> {
 }
 
 export async function getVideoInfo(url: string): Promise<VideoInfo> {
-  const stdout = await runYtDlp(["--dump-json", "--no-playlist", "--no-warnings", url]);
+  // Metadata only (no format URLs needed here), so skip the PO-token provider plugin — it checks
+  // Node/Deno availability on every yt-dlp invocation, which alone costs ~7-10s.
+  const stdout = await runYtDlp(["--dump-json", "--no-playlist", "--no-warnings", "--no-plugin-dirs", url]);
   const data = JSON.parse(stdout);
   return {
     title: data.title ?? "Unknown title",
@@ -153,7 +156,17 @@ export async function getVideoInfo(url: string): Promise<VideoInfo> {
 
 function buildFormatArgs(format: MediaFormat, quality: string): string[] {
   if (format === "audio") {
-    return ["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", `${quality}K`];
+    return [
+      "-f",
+      "bestaudio/best",
+      "-x",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      `${quality}K`,
+      "--embed-thumbnail",
+      "--embed-metadata",
+    ];
   }
 
   const heightFilter = quality === "best" ? "" : `[height<=${quality}]`;
@@ -238,7 +251,7 @@ export async function downloadMedia(
       ext,
     };
   } catch (err) {
-    log(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
+    log(`ERROR: ${errorMessage(err)}`);
     throw err;
   } finally {
     writeLog(id, logLines);

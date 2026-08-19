@@ -4,8 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isValidYoutubeUrl } from "./validate.js";
+import { errorMessage } from "./utils.js";
 import {
   downloadMedia,
+  getVideoInfo,
   updateYtDlp,
   checkEnvironment,
   DOWNLOADS_DIR,
@@ -55,6 +57,21 @@ app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, service: "content-downloader-server" });
 });
 
+app.get("/api/info", async (req, res) => {
+  const url = req.query.url;
+  if (typeof url !== "string" || !isValidYoutubeUrl(url)) {
+    res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
+    return;
+  }
+
+  try {
+    const info = await getVideoInfo(url);
+    res.json(info);
+  } catch (err) {
+    res.status(502).json({ error: errorMessage(err, "Video-Informationen konnten nicht geladen werden.") });
+  }
+});
+
 app.post("/api/convert", (req, res) => {
   const { url, format, quality } = req.body ?? {};
   if (typeof url !== "string" || !isValidYoutubeUrl(url)) {
@@ -94,7 +111,7 @@ app.post("/api/convert", (req, res) => {
         stage: "error",
         message: "Konvertierung fehlgeschlagen.",
         progress: null,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
       setTimeout(() => jobs.delete(jobId), JOB_TTL_MS);
     });
