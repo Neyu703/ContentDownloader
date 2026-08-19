@@ -23,6 +23,15 @@ pnpm monorepo with two workspaces:
 
 No lint or test tooling is configured in this repo.
 
+## Git commits
+
+Claude Code must never appear as the commit author in this repo. Every
+commit made by Claude must use
+`git commit --author="Neyu703 <129206215+Neyu703@users.noreply.github.com>"`
+(the repo owner's GitHub noreply address) instead of the default Claude
+identity — do this via the `--author` flag on each commit, never by editing
+git config.
+
 ## Not relevant in cloud sessions
 
 `control-panel.js`, `deploy.vbs`, `start.bat`, `stop.bat` are local Windows-only
