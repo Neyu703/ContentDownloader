@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
+  Easing,
+  Image,
   SafeAreaView,
   ScrollView,
   View,
@@ -16,7 +19,10 @@ import Constants from "expo-constants";
 import * as MailComposer from "expo-mail-composer";
 import * as Sharing from "expo-sharing";
 import { downloader } from "./downloader";
-import { PHASE_LABELS, type JobState, type MediaFormat, type SetupState } from "./downloader/types";
+import { PHASE_LABELS, type JobState, type MediaFormat, type PreviewPatch, type SetupState, type VideoInfo } from "./downloader/types";
+
+// Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
+const PREVIEW_DEBOUNCE_MS = 600;
 
 interface QualityOption {
   value: string;
@@ -55,17 +61,28 @@ function formatMB(mb: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }
 
-function formatEta(seconds: number): string {
+// CBR MP3 at a fixed bitrate has a near-exact size, unlike video (VBR streams, size only known once downloaded).
+function estimateAudioSizeMB(durationSeconds: number, bitrateKbps: number): number {
+  return (durationSeconds * bitrateKbps * 1000) / 8 / (1024 * 1024);
+}
+
+function formatSecondsShort(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, "0")} min`;
 }
 
+function formatDuration(seconds: number): string {
+  const totalSeconds = Math.round(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
 function formatElapsed(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${String(seconds % 60).padStart(2, "0")} min`;
+  return formatSecondsShort(Math.floor(ms / 1000));
 }
 
 function sanitizeFilename(name: string): string {
@@ -142,9 +159,26 @@ function JobCard({
   onSave?: () => Promise<void>;
 }) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
+  const [debugBoxHeight, setDebugBoxHeight] = useState(0);
+  const detailsAnim = useRef(new Animated.Value(1)).current;
   const isFinished = job.phase === "done" || job.phase === "error" || job.phase === "cancelled";
   const isStalled = !isFinished && now - job.updatedAt > STALL_HINT_MS;
   const progressPercent = job.progress ?? (job.phase === "converting" || job.phase === "merging" ? 90 : 10);
+  const estimatedFinalMB =
+    job.format === "audio" && job.duration != null && job.duration > 0
+      ? estimateAudioSizeMB(job.duration, parseInt(job.quality, 10))
+      : null;
+  const etaLabel = job.etaSeconds != null && job.etaSeconds > 0 ? formatSecondsShort(job.etaSeconds) : null;
+
+  useEffect(() => {
+    Animated.timing(detailsAnim, {
+      toValue: isDetailsExpanded ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // height/margin can't run on the native driver
+    }).start();
+  }, [isDetailsExpanded, detailsAnim]);
 
   async function doSave() {
     if (!onSave) return;
@@ -177,9 +211,17 @@ function JobCard({
 
   return (
     <View style={styles.jobCard}>
-      <Text style={styles.jobTitle} numberOfLines={1}>
-        {job.title ?? job.url}
-      </Text>
+      <View style={styles.jobHeader}>
+        {job.thumbnail && <Image source={{ uri: job.thumbnail }} style={styles.jobThumbnail} />}
+        <View style={styles.jobHeaderInfo}>
+          <Text style={styles.jobTitle} numberOfLines={1}>
+            {job.title ?? job.url}
+          </Text>
+          {job.duration != null && job.duration > 0 && (
+            <Text style={styles.jobDuration}>{formatDuration(job.duration)}</Text>
+          )}
+        </View>
+      </View>
 
       {job.phase === "error" ? (
         <Text style={styles.errorText}>{job.error}</Text>
@@ -189,31 +231,73 @@ function JobCard({
         <Text style={styles.statusText}>Fertig!</Text>
       ) : (
         <>
-          <Text style={styles.statusText}>
-            {PHASE_LABELS[job.phase]}
-            {isStalled ? " · läuft weiter, YouTube antwortet gerade langsam" : ""}
-          </Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+          <Pressable
+            style={styles.statusRow}
+            onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
+            accessibilityLabel={isDetailsExpanded ? "Details einklappen" : "Details ausklappen"}
+          >
+            <Text style={styles.statusText}>
+              {PHASE_LABELS[job.phase]}
+              {isStalled ? " · läuft weiter, YouTube antwortet gerade langsam" : ""}
+            </Text>
+            <View style={styles.collapseButton}>
+              <Animated.Text
+                style={[
+                  styles.collapseChevron,
+                  {
+                    transform: [
+                      { rotate: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) },
+                    ],
+                  },
+                ]}
+              >
+                ▾
+              </Animated.Text>
+            </View>
+          </Pressable>
+          <View style={styles.progressWrapper}>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            </View>
+            {etaLabel && (
+              <Animated.View
+                style={[
+                  styles.progressEtaBadge,
+                  { opacity: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+                ]}
+              >
+                <Text style={styles.progressEtaText}>{etaLabel}</Text>
+              </Animated.View>
+            )}
           </View>
-          <View style={styles.debugBox}>
-            {job.progress != null && <Text style={styles.debugLine}>Fortschritt: {job.progress.toFixed(1)}%</Text>}
-            {job.totalMB != null && (
-              <Text style={styles.debugLine}>
-                Größe: {job.downloadedMB != null ? formatMB(job.downloadedMB) : "?"} / {formatMB(job.totalMB)}
-              </Text>
-            )}
-            {job.speedMBs != null && <Text style={styles.debugLine}>Geschwindigkeit: {job.speedMBs.toFixed(2)} MB/s</Text>}
-            {job.etaSeconds != null && job.etaSeconds > 0 && (
-              <Text style={styles.debugLine}>ETA: {formatEta(job.etaSeconds)}</Text>
-            )}
-            <Text style={styles.debugLine}>Läuft seit: {formatElapsed(now - job.createdAt)}</Text>
-            {job.lastLine !== "" && (
-              <Text style={styles.debugLine} numberOfLines={1}>
-                {job.lastLine}
-              </Text>
-            )}
-          </View>
+          <Animated.View
+            style={{
+              height: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, debugBoxHeight] }),
+              marginTop: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }),
+              opacity: detailsAnim,
+              overflow: "hidden",
+            }}
+          >
+            <View onLayout={(e) => setDebugBoxHeight(e.nativeEvent.layout.height)} style={styles.debugBox}>
+              {job.progress != null && <Text style={styles.debugLine}>Fortschritt: {job.progress.toFixed(1)}%</Text>}
+              {job.totalMB != null && (
+                <Text style={styles.debugLine}>
+                  Heruntergeladen: {job.downloadedMB != null ? formatMB(job.downloadedMB) : "?"} / {formatMB(job.totalMB)}
+                </Text>
+              )}
+              {estimatedFinalMB != null && (
+                <Text style={styles.debugLine}>Geschätzte Endgröße: ~{formatMB(estimatedFinalMB)}</Text>
+              )}
+              {job.speedMBs != null && <Text style={styles.debugLine}>Geschwindigkeit: {job.speedMBs.toFixed(2)} MB/s</Text>}
+              {etaLabel && <Text style={styles.debugLine}>ETA: {etaLabel}</Text>}
+              <Text style={styles.debugLine}>Läuft seit: {formatElapsed(now - job.createdAt)}</Text>
+              {job.lastLine !== "" && (
+                <Text style={styles.debugLine} numberOfLines={1}>
+                  {job.lastLine}
+                </Text>
+              )}
+            </View>
+          </Animated.View>
         </>
       )}
 
@@ -271,6 +355,11 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [isSendingLog, setIsSendingLog] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; info: VideoInfo } | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  // Tracks the in-flight/last preview fetch so a download that starts before the debounce timer
+  // fires can still patch title/duration/thumbnail onto the job once it resolves.
+  const previewRequestRef = useRef<{ url: string; promise: Promise<VideoInfo | null> } | null>(null);
 
   const hasActiveJob = jobs.some((j) => j.phase !== "done" && j.phase !== "error" && j.phase !== "cancelled");
   const hasFinishedJob = jobs.some((j) => j.phase === "done" || j.phase === "error" || j.phase === "cancelled");
@@ -283,6 +372,35 @@ export default function App() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!downloader.getVideoInfo) return;
+    const trimmed = url.trim();
+    if (!trimmed) {
+      setPreview(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    setIsPreviewLoading(true);
+    const timer = setTimeout(() => {
+      const promise = downloader.getVideoInfo!(trimmed, controller.signal).catch(() => null);
+      previewRequestRef.current = { url: trimmed, promise };
+      promise.then((info) => {
+        if (!cancelled && info) setPreview({ url: trimmed, info });
+      }).finally(() => {
+        if (!cancelled) setIsPreviewLoading(false);
+      });
+    }, PREVIEW_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [url]);
+
   function handleFormatChange(next: MediaFormat) {
     setFormat(next);
     setQuality(DEFAULT_QUALITY[next]);
@@ -293,23 +411,49 @@ export default function App() {
     if (text) setUrl(text.trim());
   }
 
-  async function submit(targetUrl: string, targetFormat: MediaFormat, targetQuality: string) {
+  async function submit(
+    targetUrl: string,
+    targetFormat: MediaFormat,
+    targetQuality: string,
+    info: PreviewPatch | null = null
+  ): Promise<string | null> {
     setSubmitError(null);
     setIsSubmitting(true);
     try {
-      await downloader.enqueue({ url: targetUrl, format: targetFormat, quality: targetQuality });
+      return await downloader.enqueue({
+        url: targetUrl,
+        format: targetFormat,
+        quality: targetQuality,
+        title: info?.title,
+        durationSeconds: info?.duration,
+        thumbnail: info?.thumbnail,
+      });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Herunterladen fehlgeschlagen.");
+      return null;
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleConvert() {
-    if (!url.trim() || isSubmitting) return;
     const targetUrl = url.trim();
+    if (!targetUrl || isSubmitting) return;
     setUrl("");
-    await submit(targetUrl, format, quality);
+
+    // Starts the job right away with whatever preview info is already resolved; title/duration/
+    // thumbnail are patched in afterwards if they weren't ready yet, so a slow yt-dlp lookup never
+    // delays the actual download start.
+    const immediateInfo = preview?.url === targetUrl ? preview.info : null;
+    const jobId = await submit(targetUrl, format, quality, immediateInfo);
+
+    if (!immediateInfo && jobId && downloader.getVideoInfo && downloader.updateJobPreview) {
+      const pending = previewRequestRef.current;
+      const infoPromise = pending?.url === targetUrl ? pending.promise : downloader.getVideoInfo(targetUrl).catch(() => null);
+      infoPromise.then((info) => {
+        if (info) downloader.updateJobPreview!(jobId, info);
+      });
+    }
   }
 
   async function handleSendLog() {
@@ -380,11 +524,28 @@ export default function App() {
             onChangeText={setUrl}
             autoCapitalize="none"
             autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={handleConvert}
           />
           <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel="Einfügen">
             <Text style={styles.pasteButtonIcon}>📋</Text>
           </Pressable>
         </View>
+
+        {isPreviewLoading && !preview && <Text style={styles.searchMessage}>Suche Video…</Text>}
+        {preview && (
+          <View style={styles.previewCard}>
+            {preview.info.thumbnail && (
+              <Image source={{ uri: preview.info.thumbnail }} style={styles.previewThumbnail} />
+            )}
+            <View style={styles.previewInfo}>
+              <Text style={styles.previewTitle} numberOfLines={2}>
+                {preview.info.title}
+              </Text>
+              {preview.info.duration > 0 && <Text style={styles.previewMeta}>{formatDuration(preview.info.duration)}</Text>}
+            </View>
+          </View>
+        )}
 
         <View style={styles.optionsRow}>
           <View style={styles.optionsCol}>
@@ -420,7 +581,7 @@ export default function App() {
                   job={job}
                   now={now}
                   onCancel={() => downloader.cancel(job.id)}
-                  onRetry={() => submit(job.url, job.format, job.quality)}
+                  onRetry={() => submit(job.url, job.format, job.quality, job)}
                   onShare={() => handleShare(job)}
                   isSharing={sharingId === job.id}
                   onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
@@ -494,6 +655,36 @@ const styles = StyleSheet.create({
   },
   pasteButtonIcon: {
     fontSize: 18,
+  },
+  previewCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#151515",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#2c2c2c",
+    padding: 10,
+    marginBottom: 12,
+  },
+  previewThumbnail: {
+    width: 80,
+    height: 45,
+    borderRadius: 6,
+    backgroundColor: "#0d0d0d",
+  },
+  previewInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  previewTitle: {
+    color: "#f0f0f0",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  previewMeta: {
+    color: "#888",
+    fontSize: 12,
   },
   optionsRow: {
     flexDirection: "row",
@@ -592,19 +783,62 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
+  jobHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  jobThumbnail: {
+    width: 56,
+    height: 32,
+    borderRadius: 4,
+    backgroundColor: "#0d0d0d",
+  },
+  jobHeaderInfo: {
+    flex: 1,
+    gap: 2,
+  },
   jobTitle: {
     color: "#f0f0f0",
     fontWeight: "600",
     fontSize: 14,
+  },
+  jobDuration: {
+    color: "#888",
+    fontSize: 12,
   },
   jobActions: {
     flexDirection: "row",
     gap: 8,
     flexWrap: "wrap",
   },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   statusText: {
+    flex: 1,
     color: "#a0a0a0",
     fontSize: 13,
+  },
+  collapseButton: {
+    backgroundColor: "#2c2c2c",
+    borderRadius: 6,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  collapseChevron: {
+    color: "#ccc",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  progressWrapper: {
+    width: "100%",
+    position: "relative",
   },
   progressTrack: {
     width: "100%",
@@ -617,6 +851,21 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "#646cff",
     borderRadius: 4,
+  },
+  progressEtaBadge: {
+    position: "absolute",
+    right: 4,
+    top: "50%",
+    transform: [{ translateY: -8 }],
+    backgroundColor: "rgba(13,13,13,0.75)",
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  progressEtaText: {
+    color: "#f0f0f0",
+    fontSize: 10,
+    fontWeight: "600",
   },
   debugBox: {
     width: "100%",
