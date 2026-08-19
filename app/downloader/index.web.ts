@@ -1,4 +1,4 @@
-import type { Downloader, DownloadRequest, JobPhase, JobState, SetupState } from "./types";
+import type { Downloader, DownloadRequest, JobPhase, JobState, PreviewPatch, SetupState, VideoInfo } from "./types";
 
 const SERVER_URL = "http://localhost:3001";
 const POLL_INTERVAL_MS = 600;
@@ -26,6 +26,13 @@ const STAGE_TO_PHASE: Record<ServerJob["stage"], JobPhase> = {
   done: "done",
   error: "error",
 };
+
+// yt-dlp reports ETA as an already-formatted "M:SS" / "H:MM:SS" string, not seconds.
+function parseEtaToSeconds(eta: string): number | null {
+  const parts = eta.split(":").map(Number);
+  if (parts.length < 2 || parts.length > 3 || parts.some((n) => Number.isNaN(n))) return null;
+  return parts.reduce((acc, part) => acc * 60 + part, 0);
+}
 
 const jobs = new Map<string, JobState>();
 const pollers = new Map<string, ReturnType<typeof setInterval>>();
@@ -110,6 +117,7 @@ function pollJob(id: string) {
         downloadedMB: job.downloadedMB,
         totalMB: job.totalMB,
         speedMBs: job.speedMBs,
+        etaSeconds: job.eta ? parseEtaToSeconds(job.eta) : null,
         lastLine: job.message,
       });
     } catch {
@@ -150,10 +158,12 @@ export const downloader: Downloader = {
       format: request.format,
       quality: request.quality,
       phase: "queued",
-      title: null,
+      title: request.title ?? null,
+      duration: request.durationSeconds ?? null,
       progress: null,
       etaSeconds: null,
       lastLine: "",
+      thumbnail: request.thumbnail ?? null,
       result: null,
       ext: null,
       error: null,
@@ -163,6 +173,24 @@ export const downloader: Downloader = {
     notify();
     pollJob(jobId);
     return jobId;
+  },
+
+  async getVideoInfo(url: string, signal?: AbortSignal) {
+    const res = await fetch(`${SERVER_URL}/api/info?url=${encodeURIComponent(url)}`, { signal });
+    if (!res.ok) throw new Error(await parseError(res));
+    return (await res.json()) as VideoInfo;
+  },
+
+  updateJobPreview(id, info: PreviewPatch) {
+    // Only fills in fields still missing — never overwrites the confirmed title the server sends
+    // once the job actually finishes.
+    const existing = jobs.get(id);
+    if (!existing) return;
+    patchJob(id, {
+      title: existing.title ?? info.title ?? null,
+      duration: existing.duration ?? info.duration ?? null,
+      thumbnail: existing.thumbnail ?? info.thumbnail ?? null,
+    });
   },
 
   cancel(id: string) {

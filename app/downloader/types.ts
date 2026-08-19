@@ -1,5 +1,15 @@
 export type MediaFormat = "audio" | "video";
 
+export interface VideoInfo {
+  title: string;
+  duration: number;
+  thumbnail: string | null;
+  uploader: string | null;
+}
+
+/** Partial video metadata used to patch a job that was already started before the full preview arrived. */
+export type PreviewPatch = { title?: string | null; duration?: number | null; thumbnail?: string | null };
+
 /**
  * Every phase a download can be in, on both platforms. Web never produces "queued" (the server
  * starts jobs immediately) or "merging" (it only reports "converting"), but the union is shared so
@@ -22,12 +32,16 @@ export interface JobState {
   quality: string;
   phase: JobPhase;
   title: string | null;
+  /** Web only — carried over from the preview fetched before submit; native jobs never set this. */
+  duration?: number | null;
   progress: number | null;
   downloadedMB?: number;
   totalMB?: number;
   speedMBs?: number;
   etaSeconds: number | null;
   lastLine: string;
+  /** Web only — carried over from the preview fetched before submit; native jobs never set this. */
+  thumbnail?: string | null;
   /** Local file path (native) or download URL (web) once phase is "done". */
   result: string | null;
   ext: "mp3" | "mp4" | null;
@@ -40,6 +54,10 @@ export interface DownloadRequest {
   url: string;
   format: MediaFormat;
   quality: string;
+  /** Web only — title/duration/thumbnail already fetched for the preview, carried into the job so JobCard can show them immediately instead of just the raw URL. */
+  title?: string | null;
+  durationSeconds?: number | null;
+  thumbnail?: string | null;
 }
 
 /** One-time setup before the first download can start. Native only unpacks/updates yt-dlp once. */
@@ -63,6 +81,10 @@ export interface Downloader {
   getDebugLogFileUri?(): Promise<string>;
   /** Native only — copies a finished job's file into the device's public Downloads folder. */
   saveToDownloads?(job: JobState): Promise<void>;
+  /** Web only (talks to the local server) — fetches title/duration/thumbnail for a preview before starting a download. */
+  getVideoInfo?(url: string, signal?: AbortSignal): Promise<VideoInfo>;
+  /** Web only — patches title/duration/thumbnail onto a job that was already started before the preview info arrived. */
+  updateJobPreview?(id: string, info: PreviewPatch): void;
 }
 
 export const PHASE_LABELS: Record<JobPhase, string> = {
