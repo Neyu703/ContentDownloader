@@ -42,10 +42,6 @@ yarn-error.*
 .env.*
 !.env.example
 
-# Claude / agent config (never commit)
-.claude/
-CLAUDE.md
-
 # IDE
 .idea/
 .vscode/
