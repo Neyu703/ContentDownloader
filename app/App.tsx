@@ -565,11 +565,20 @@ export default function App() {
   const jobsSection = jobs.length > 0 && (
     <>
       {hasFinishedJob && (
-        <Pressable style={styles.linkButton} onPress={() => downloader.clearFinished()}>
+        <Pressable
+          style={[styles.linkButton, useTwoColumnLayout && styles.linkButtonFlush]}
+          onPress={() => downloader.clearFinished()}
+        >
           <Text style={styles.linkText}>Fertige entfernen</Text>
         </Pressable>
       )}
-      <ScrollView style={[styles.jobList, useTwoColumnLayout && styles.jobListWide]}>
+      <ScrollView
+        style={[
+          styles.jobList,
+          useTwoColumnLayout && styles.jobListWide,
+          useTwoColumnLayout && !hasFinishedJob && styles.jobListFlush,
+        ]}
+      >
         {jobs.map((job) => (
           <JobCard
             key={job.id}
@@ -810,11 +819,19 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginTop: 14,
   },
+  // Same reasoning as jobListFlush — no button above it to space away from in the right column.
+  linkButtonFlush: {
+    marginTop: 0,
+  },
   jobList: {
     marginTop: 10,
   },
   jobListWide: {
     flex: 1,
+  },
+  // Zeroes the marginTop that only makes sense when stacked below the download button.
+  jobListFlush: {
+    marginTop: 0,
   },
   jobCard: {
     backgroundColor: "#151515",
