@@ -20,7 +20,7 @@ import Constants from "expo-constants";
 import * as MailComposer from "expo-mail-composer";
 import * as Sharing from "expo-sharing";
 import { downloader } from "./downloader";
-import { PHASE_LABELS, type JobState, type MediaFormat, type PreviewPatch, type SetupState, type VideoInfo } from "./downloader/types";
+import { PHASE_LABELS, type JobPhase, type JobState, type MediaFormat, type PreviewPatch, type SetupState, type VideoInfo } from "./downloader/types";
 
 // Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
 const PREVIEW_DEBOUNCE_MS = 600;
@@ -91,6 +91,10 @@ function formatElapsed(ms: number): string {
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim() || "download";
+}
+
+function isFinishedPhase(phase: JobPhase): boolean {
+  return phase === "done" || phase === "error" || phase === "cancelled";
 }
 
 function Dropdown<T extends string>({
@@ -166,7 +170,7 @@ function JobCard({
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [debugBoxHeight, setDebugBoxHeight] = useState(0);
   const detailsAnim = useRef(new Animated.Value(1)).current;
-  const isFinished = job.phase === "done" || job.phase === "error" || job.phase === "cancelled";
+  const isFinished = isFinishedPhase(job.phase);
   const isStalled = !isFinished && now - job.updatedAt > STALL_HINT_MS;
   const progressPercent = job.progress ?? (job.phase === "converting" || job.phase === "merging" ? 90 : 10);
   const estimatedFinalMB =
@@ -365,8 +369,8 @@ export default function App() {
   // fires can still patch title/duration/thumbnail onto the job once it resolves.
   const previewRequestRef = useRef<{ url: string; promise: Promise<VideoInfo | null> } | null>(null);
 
-  const hasActiveJob = jobs.some((j) => j.phase !== "done" && j.phase !== "error" && j.phase !== "cancelled");
-  const hasFinishedJob = jobs.some((j) => j.phase === "done" || j.phase === "error" || j.phase === "cancelled");
+  const hasActiveJob = jobs.some((j) => !isFinishedPhase(j.phase));
+  const hasFinishedJob = jobs.some((j) => isFinishedPhase(j.phase));
   const now = useNow(hasActiveJob);
   const { width: windowWidth } = useWindowDimensions();
   // Two-column layout only pays off once there's actually a job list to put next to the form.
@@ -566,7 +570,7 @@ export default function App() {
     <>
       {hasFinishedJob && (
         <Pressable
-          style={[styles.linkButton, useTwoColumnLayout && styles.linkButtonFlush]}
+          style={[styles.linkButton, useTwoColumnLayout && styles.flushTop]}
           onPress={() => downloader.clearFinished()}
         >
           <Text style={styles.linkText}>Fertige entfernen</Text>
@@ -576,7 +580,7 @@ export default function App() {
         style={[
           styles.jobList,
           useTwoColumnLayout && styles.jobListWide,
-          useTwoColumnLayout && !hasFinishedJob && styles.jobListFlush,
+          useTwoColumnLayout && !hasFinishedJob && styles.flushTop,
         ]}
       >
         {jobs.map((job) => (
@@ -819,18 +823,15 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginTop: 14,
   },
-  // Same reasoning as jobListFlush — no button above it to space away from in the right column.
-  linkButtonFlush: {
-    marginTop: 0,
-  },
   jobList: {
     marginTop: 10,
   },
   jobListWide: {
     flex: 1,
   },
-  // Zeroes the marginTop that only makes sense when stacked below the download button.
-  jobListFlush: {
+  // Zeroes a marginTop that only makes sense when stacked below another element — used when the
+  // clear-finished link or the job list is the first thing in the right column instead.
+  flushTop: {
     marginTop: 0,
   },
   jobCard: {
