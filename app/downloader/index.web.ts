@@ -194,10 +194,11 @@ export const downloader: Downloader = {
   },
 
   cancel(id: string) {
-    // The server has no cancel endpoint; this only stops polling and hides the job, same as the
-    // previous "Neu versuchen" reset behaved.
+    // The server has no cancel endpoint; this only stops polling. The job is removed immediately
+    // rather than left sitting in the list as "Abgebrochen" until "Fertige entfernen" is clicked.
     stopPolling(id);
-    patchJob(id, { phase: "cancelled" });
+    jobs.delete(id);
+    notify();
   },
 
   clearFinished() {
