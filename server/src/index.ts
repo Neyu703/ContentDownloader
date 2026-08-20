@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isValidYoutubeUrl } from "./validate.js";
-import { errorMessage } from "./utils.js";
+import { userFacingErrorMessage } from "./utils.js";
 import {
   downloadMedia,
   getVideoInfo,
@@ -68,7 +68,7 @@ app.get("/api/info", async (req, res) => {
     const info = await getVideoInfo(url);
     res.json(info);
   } catch (err) {
-    res.status(502).json({ error: errorMessage(err, "Video-Informationen konnten nicht geladen werden.") });
+    res.status(502).json({ error: userFacingErrorMessage(err, "Video-Informationen konnten nicht geladen werden.") });
   }
 });
 
@@ -111,7 +111,7 @@ app.post("/api/convert", (req, res) => {
         stage: "error",
         message: "Konvertierung fehlgeschlagen.",
         progress: null,
-        error: errorMessage(err),
+        error: userFacingErrorMessage(err),
       });
       setTimeout(() => jobs.delete(jobId), JOB_TTL_MS);
     });
