@@ -157,11 +157,15 @@ object DownloadQueue {
         job.phase = JobPhase.CANCELLED
         job.finishedAt = now
         job.updatedAt = now
-        touch()
 
         // Kills the running yt-dlp process; a queued job is stopped by cancelling its coroutine.
         scope.launch { runCatching { YoutubeDL.getInstance().destroyProcessById(id) } }
-        synchronized(lock) { coroutines.remove(id) }?.cancel()
+        synchronized(lock) {
+            coroutines.remove(id)?.cancel()
+            // Removed immediately rather than left sitting in the list until "Fertige entfernen".
+            jobs.remove(job)
+        }
+        touch()
     }
 
     fun cancelAll() {
