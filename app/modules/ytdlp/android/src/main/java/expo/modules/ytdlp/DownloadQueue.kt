@@ -325,8 +325,25 @@ object DownloadQueue {
         _revision.value = _revision.value + 1
     }
 
-    /** yt-dlp errors carry the whole stderr; the last real line is the part a user can act on. */
+    /**
+     * yt-dlp surfaces YouTube's own "Sign in to confirm you're not a bot" gate verbatim, including
+     * a raw stack of wiki links — not actionable for a user, since it requires real logged-in
+     * cookies to bypass, not anything this app can retry or work around on its own. Mirrors
+     * userFacingErrorMessage() in server/src/utils.ts. The full technical error still reaches
+     * DebugLog.addError() separately (called with the raw Throwable before this runs), so nothing
+     * is lost for debugging.
+     */
     private fun describeError(error: Throwable): String {
+        val raw = describeErrorRaw(error)
+        return if (Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE).containsMatchIn(raw)) {
+            "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
+        } else {
+            raw
+        }
+    }
+
+    /** yt-dlp errors carry the whole stderr; the last real line is the part a user can act on. */
+    private fun describeErrorRaw(error: Throwable): String {
         val raw = error.message?.trim().orEmpty()
         if (raw.isEmpty()) {
             // Wrapper exceptions (ExceptionInInitializerError, InvocationTargetException, ...)
