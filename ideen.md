@@ -186,7 +186,7 @@ Ideen, die gezielt diese drei Formfaktoren bedienen, statt generisch "responsive
   **Aufwand: klein, aber abhängig vom Test-Feedback**.
 - [ ] **[7-5] Globaler Tastatur-Shortcut (Desktop)** — z.B. `Strg+V` irgendwo im Fenster fügt automatisch in
   das URL-Feld ein, ohne erst hineinklicken zu müssen. **Aufwand: klein**.
-- [ ] **[7-6] Breakpoint-Layout ab Tablet-Breite** — `useWindowDimensions()` (Expo/RN-Bordmittel) statt
+- [x] **[7-6] Breakpoint-Layout ab Tablet-Breite** — `useWindowDimensions()` (Expo/RN-Bordmittel) statt
   fixer `maxWidth: 480`: ab einer bestimmten Fensterbreite (z.B. >700px) URL-Eingabe/Format-Wahl
   links, Job-Liste rechts als zweispaltiges Layout, statt beides untereinander in einer schmalen
   Karte. Nutzt den Platz auf Tab S10 FE (Querformat) und Desktop sinnvoll, ohne das
@@ -263,7 +263,7 @@ bieten und was davon für ContentDownloader übertragbar ist:
 **Nächste konkrete Schritte, nach Aufwand/Wirkung:**
 1. [x] [1-1] Video-Vorschau vor dem Download (Daten schon vorhanden, nur UI)
 2. [x] [4-2] ID3-Tags/Cover-Art einbetten (ein Flag in `buildFormatArgs`)
-3. [x] [7-3] Enter-zum-Absenden / [ ] [7-6] Breakpoint-Layout für Tablet/Desktop (kleine, gezielte
+3. [x] [7-3] Enter-zum-Absenden / [x] [7-6] Breakpoint-Layout für Tablet/Desktop (kleine, gezielte
    Fixes für die drei tatsächlich genutzten Geräte)
 4. [ ] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
 5. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
