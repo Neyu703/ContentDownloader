@@ -577,11 +577,7 @@ export default function App() {
         </Pressable>
       )}
       <ScrollView
-        style={[
-          styles.jobList,
-          useTwoColumnLayout && styles.jobListWide,
-          useTwoColumnLayout && !hasFinishedJob && styles.flushTop,
-        ]}
+        style={[styles.jobList, useTwoColumnLayout && !hasFinishedJob && styles.flushTop]}
       >
         {jobs.map((job) => (
           <JobCard
@@ -655,8 +651,6 @@ const styles = StyleSheet.create({
   twoColumnRow: {
     flexDirection: "row",
     gap: 24,
-    flex: 1,
-    minHeight: 0,
   },
   twoColumnLeft: {
     flex: 1,
@@ -825,9 +819,6 @@ const styles = StyleSheet.create({
   },
   jobList: {
     marginTop: 10,
-  },
-  jobListWide: {
-    flex: 1,
   },
   // Zeroes a marginTop that only makes sense when stacked below another element — used when the
   // clear-finished link or the job list is the first thing in the right column instead.
