@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Platform,
   Modal,
+  useWindowDimensions,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
@@ -23,6 +24,9 @@ import { PHASE_LABELS, type JobState, type MediaFormat, type PreviewPatch, type 
 
 // Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
 const PREVIEW_DEBOUNCE_MS = 600;
+
+// Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
+const WIDE_LAYOUT_BREAKPOINT = 700;
 
 interface QualityOption {
   value: string;
@@ -364,6 +368,9 @@ export default function App() {
   const hasActiveJob = jobs.some((j) => j.phase !== "done" && j.phase !== "error" && j.phase !== "cancelled");
   const hasFinishedJob = jobs.some((j) => j.phase === "done" || j.phase === "error" || j.phase === "cancelled");
   const now = useNow(hasActiveJob);
+  const { width: windowWidth } = useWindowDimensions();
+  // Two-column layout only pays off once there's actually a job list to put next to the form.
+  const useTwoColumnLayout = windowWidth >= WIDE_LAYOUT_BREAKPOINT && jobs.length > 0;
 
   useEffect(() => {
     return downloader.subscribe((nextJobs, nextSetup) => {
@@ -499,9 +506,89 @@ export default function App() {
     }
   }
 
+  const formSection = (
+    <>
+      <View style={styles.urlRow}>
+        <TextInput
+          style={styles.urlInput}
+          placeholder="https://www.youtube.com/watch?v=..."
+          placeholderTextColor="#666"
+          value={url}
+          onChangeText={setUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={handleConvert}
+        />
+        <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel="Einfügen">
+          <Text style={styles.pasteButtonIcon}>📋</Text>
+        </Pressable>
+      </View>
+
+      {isPreviewLoading && !preview && <Text style={styles.searchMessage}>Suche Video…</Text>}
+      {preview && (
+        <View style={styles.previewCard}>
+          {preview.info.thumbnail && (
+            <Image source={{ uri: preview.info.thumbnail }} style={styles.previewThumbnail} />
+          )}
+          <View style={styles.previewInfo}>
+            <Text style={styles.previewTitle} numberOfLines={2}>
+              {preview.info.title}
+            </Text>
+            {preview.info.duration > 0 && <Text style={styles.previewMeta}>{formatDuration(preview.info.duration)}</Text>}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.optionsRow}>
+        <View style={styles.optionsCol}>
+          <Text style={styles.label}>Format</Text>
+          <Dropdown options={FORMAT_OPTIONS} value={format} onChange={handleFormatChange} />
+        </View>
+        <View style={styles.optionsCol}>
+          <Text style={styles.label}>Qualität</Text>
+          <Dropdown options={QUALITY_OPTIONS[format]} value={quality} onChange={setQuality} />
+        </View>
+      </View>
+
+      <Pressable
+        style={[styles.button, isSubmitting && styles.buttonDisabled]}
+        onPress={handleConvert}
+        disabled={isSubmitting}
+      >
+        <Text style={styles.buttonText}>{isSubmitting ? "Wird gestartet…" : "Herunterladen"}</Text>
+      </Pressable>
+      {submitError && <Text style={styles.errorText}>{submitError}</Text>}
+    </>
+  );
+
+  const jobsSection = jobs.length > 0 && (
+    <>
+      {hasFinishedJob && (
+        <Pressable style={styles.linkButton} onPress={() => downloader.clearFinished()}>
+          <Text style={styles.linkText}>Fertige entfernen</Text>
+        </Pressable>
+      )}
+      <ScrollView style={[styles.jobList, useTwoColumnLayout && styles.jobListWide]}>
+        {jobs.map((job) => (
+          <JobCard
+            key={job.id}
+            job={job}
+            now={now}
+            onCancel={() => downloader.cancel(job.id)}
+            onRetry={() => submit(job.url, job.format, job.quality, job)}
+            onShare={() => handleShare(job)}
+            isSharing={sharingId === job.id}
+            onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
+          />
+        ))}
+      </ScrollView>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.page}>
-      <View style={styles.card}>
+      <View style={[styles.card, useTwoColumnLayout && styles.cardWide]}>
         <Text style={styles.title}>YouTube Downloader</Text>
         <Text style={styles.subtitle}>Lädt YouTube-Videos als MP3 oder MP4 in der gewünschten Qualität herunter</Text>
 
@@ -515,79 +602,15 @@ export default function App() {
           </Pressable>
         )}
 
-        <View style={styles.urlRow}>
-          <TextInput
-            style={styles.urlInput}
-            placeholder="https://www.youtube.com/watch?v=..."
-            placeholderTextColor="#666"
-            value={url}
-            onChangeText={setUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={handleConvert}
-          />
-          <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel="Einfügen">
-            <Text style={styles.pasteButtonIcon}>📋</Text>
-          </Pressable>
-        </View>
-
-        {isPreviewLoading && !preview && <Text style={styles.searchMessage}>Suche Video…</Text>}
-        {preview && (
-          <View style={styles.previewCard}>
-            {preview.info.thumbnail && (
-              <Image source={{ uri: preview.info.thumbnail }} style={styles.previewThumbnail} />
-            )}
-            <View style={styles.previewInfo}>
-              <Text style={styles.previewTitle} numberOfLines={2}>
-                {preview.info.title}
-              </Text>
-              {preview.info.duration > 0 && <Text style={styles.previewMeta}>{formatDuration(preview.info.duration)}</Text>}
-            </View>
+        {useTwoColumnLayout ? (
+          <View style={styles.twoColumnRow}>
+            <View style={styles.twoColumnLeft}>{formSection}</View>
+            <View style={styles.twoColumnRight}>{jobsSection}</View>
           </View>
-        )}
-
-        <View style={styles.optionsRow}>
-          <View style={styles.optionsCol}>
-            <Text style={styles.label}>Format</Text>
-            <Dropdown options={FORMAT_OPTIONS} value={format} onChange={handleFormatChange} />
-          </View>
-          <View style={styles.optionsCol}>
-            <Text style={styles.label}>Qualität</Text>
-            <Dropdown options={QUALITY_OPTIONS[format]} value={quality} onChange={setQuality} />
-          </View>
-        </View>
-
-        <Pressable
-          style={[styles.button, isSubmitting && styles.buttonDisabled]}
-          onPress={handleConvert}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.buttonText}>{isSubmitting ? "Wird gestartet…" : "Herunterladen"}</Text>
-        </Pressable>
-        {submitError && <Text style={styles.errorText}>{submitError}</Text>}
-
-        {jobs.length > 0 && (
+        ) : (
           <>
-            {hasFinishedJob && (
-              <Pressable style={styles.linkButton} onPress={() => downloader.clearFinished()}>
-                <Text style={styles.linkText}>Fertige entfernen</Text>
-              </Pressable>
-            )}
-            <ScrollView style={styles.jobList}>
-              {jobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  now={now}
-                  onCancel={() => downloader.cancel(job.id)}
-                  onRetry={() => submit(job.url, job.format, job.quality, job)}
-                  onShare={() => handleShare(job)}
-                  isSharing={sharingId === job.id}
-                  onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
-                />
-              ))}
-            </ScrollView>
+            {formSection}
+            {jobsSection}
           </>
         )}
       </View>
@@ -612,6 +635,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#2c2c2c",
     padding: 28,
+  },
+  cardWide: {
+    maxWidth: 920,
+  },
+  twoColumnRow: {
+    flexDirection: "row",
+    gap: 24,
+    flex: 1,
+    minHeight: 0,
+  },
+  twoColumnLeft: {
+    flex: 1,
+  },
+  twoColumnRight: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 26,
@@ -773,6 +812,9 @@ const styles = StyleSheet.create({
   },
   jobList: {
     marginTop: 10,
+  },
+  jobListWide: {
+    flex: 1,
   },
   jobCard: {
     backgroundColor: "#151515",
