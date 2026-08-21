@@ -48,6 +48,24 @@ nach Aufwand sortiert, klein → groß.
 - [ ] **[1-8] Live-Stream-Mitschnitt** — yt-dlp kann laufende Livestreams von Beginn des Anschauens an
   aufzeichnen (`--live-from-start`); eigener Job-Typ ohne bekannte Gesamtlänge/Fortschritt.
   **Aufwand: mittel–groß**.
+- [ ] **[1-9] YouTube-Cookie-Authentifizierung gegen "Sign in to confirm"-Gate** — YouTube verlangt bei
+  einem unvorhersehbaren Teil der Videos inzwischen eine echte Login-Session statt nur eines
+  PO-Tokens (bestätigt 2026-08-20 anhand Job-Logs: gleicher Tag, ein Video scheitert mit der Gate,
+  andere laufen normal durch — kein Totalausfall, aber auch kein Fall, den yt-dlp wie das
+  PO-Token/403-Problem automatisch selbst löst, dafür ist die Gate zu bewusst gesetzt). yt-dlp
+  nennt selbst nur `--cookies-from-browser`/`--cookies` als Lösung; das existiert im Code aktuell
+  nirgends (`server/src/youtube.ts`, `app/modules/ytdlp/android/.../DownloadQueue.kt`).
+  Öffentliche Download-APIs (Cobalt, Apify, RapidAPI-Marktplatz-Anbieter) als Alternative
+  recherchiert: kein Shortcut — sie kämpfen intern mit demselben Bot-Detection-Problem (die
+  öffentliche Cobalt-Instanz wurde 2026 von YouTube selbst geblockt), kosten zusätzlich Geld/Abo
+  und schicken Links an einen Drittanbieter (Datenschutz/ToS-Risiko, siehe Abschnitt 8).
+  Zwei Umsetzungswege je Plattform: Server (Desktop) einfach per `--cookies-from-browser chrome`
+  (Chrome läuft lokal); Android-APK schwieriger, da kein Zugriff auf fremde Browser-Profile
+  möglich ist (Sandboxing) und die YouTube-App keine nutzbaren Cookies liefert — entweder (a)
+  manuell exportierte `cookies.txt` über einen neuen Settings-Screen importieren, oder (b)
+  In-App-WebView-Login mit Cookie-Extraktion (Risiko: Google blockt eingebettete WebViews teils
+  aktiv). **Aufwand: mittel–groß** (zwei Plattformen, UI für Cookie-Verwaltung, ggf.
+  Fallback-Logik).
 
 ## 2. Verlauf & Persistenz
 
