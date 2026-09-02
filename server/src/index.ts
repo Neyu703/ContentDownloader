@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Response } from "express";
 import cors from "cors";
 import fs from "node:fs";
 import path from "node:path";
@@ -8,6 +8,7 @@ import { userFacingErrorMessage } from "./utils.js";
 import {
   downloadMedia,
   getVideoInfo,
+  getPlaylistInfo,
   updateYtDlp,
   checkEnvironment,
   DOWNLOADS_DIR,
@@ -36,22 +37,29 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim() || "audio";
 }
 
-interface JobState {
+/** Validates `url` and, if invalid, writes the shared 400 response. Returns whether it was valid. */
+function requireYoutubeUrl(url: unknown, res: Response): url is string {
+  if (typeof url === "string" && isValidYoutubeUrl(url)) return true;
+  res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
+  return false;
+}
+
+type JobState = Omit<ProgressUpdate, "stage"> & {
   stage: ProgressUpdate["stage"] | "starting" | "done" | "error";
-  message: string;
-  progress: number | null;
-  downloadedMB?: number;
-  totalMB?: number;
-  speedMBs?: number;
-  eta?: string;
   resultId?: string;
   title?: string;
   ext?: string;
   error?: string;
-}
+};
 
 const jobs = new Map<string, JobState>();
 const JOB_TTL_MS = 10 * 60 * 1000;
+
+/** Stores a job's final state and schedules its removal after JOB_TTL_MS. */
+function finishJob(jobId: string, state: JobState): void {
+  jobs.set(jobId, state);
+  setTimeout(() => jobs.delete(jobId), JOB_TTL_MS);
+}
 
 app.get("/api/ping", (_req, res) => {
   res.json({ ok: true, service: "content-downloader-server" });
@@ -59,10 +67,7 @@ app.get("/api/ping", (_req, res) => {
 
 app.get("/api/info", async (req, res) => {
   const url = req.query.url;
-  if (typeof url !== "string" || !isValidYoutubeUrl(url)) {
-    res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
-    return;
-  }
+  if (!requireYoutubeUrl(url, res)) return;
 
   try {
     const info = await getVideoInfo(url);
@@ -72,12 +77,26 @@ app.get("/api/info", async (req, res) => {
   }
 });
 
-app.post("/api/convert", (req, res) => {
-  const { url, format, quality } = req.body ?? {};
-  if (typeof url !== "string" || !isValidYoutubeUrl(url)) {
-    res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
+app.get("/api/playlist-info", async (req, res) => {
+  const url = req.query.url;
+  if (!requireYoutubeUrl(url, res)) return;
+  const start = Number(req.query.start ?? 1);
+  if (!Number.isInteger(start) || start < 1) {
+    res.status(400).json({ error: "Ungültiger Startindex." });
     return;
   }
+
+  try {
+    const info = await getPlaylistInfo(url, start);
+    res.json(info);
+  } catch (err) {
+    res.status(502).json({ error: userFacingErrorMessage(err, "Playlist konnte nicht geladen werden.") });
+  }
+});
+
+app.post("/api/convert", (req, res) => {
+  const { url, format, quality } = req.body ?? {};
+  if (!requireYoutubeUrl(url, res)) return;
   if (format !== "audio" && format !== "video") {
     res.status(400).json({ error: "Bitte Audio oder Video auswählen." });
     return;
@@ -96,7 +115,7 @@ app.post("/api/convert", (req, res) => {
     jobs.set(jobId, update);
   })
     .then((result) => {
-      jobs.set(jobId, {
+      finishJob(jobId, {
         stage: "done",
         message: "Fertig!",
         progress: 100,
@@ -104,16 +123,14 @@ app.post("/api/convert", (req, res) => {
         title: result.title,
         ext: result.ext,
       });
-      setTimeout(() => jobs.delete(jobId), JOB_TTL_MS);
     })
     .catch((err) => {
-      jobs.set(jobId, {
+      finishJob(jobId, {
         stage: "error",
         message: "Konvertierung fehlgeschlagen.",
         progress: null,
         error: userFacingErrorMessage(err),
       });
-      setTimeout(() => jobs.delete(jobId), JOB_TTL_MS);
     });
 });
 

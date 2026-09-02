@@ -17,6 +17,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
@@ -30,9 +32,44 @@ private const val MAX_PARALLEL = 2
 
 private const val OUTPUT_DIR_NAME = "ytdlp"
 
+/** How many playlist entries getPlaylistInfo() lists per call — mirrors PLAYLIST_PAGE_SIZE in server/src/youtube.ts. */
+private const val PLAYLIST_PAGE_SIZE = 50
+
 private val YOUTUBE_HOSTS = setOf(
     "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"
 )
+
+/** Characters not allowed in a filename on common filesystems. */
+private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
+
+/** yt-dlp's phrasing for YouTube's "Sign in to confirm you're not a bot" gate. */
+private val SIGN_IN_GATE_PATTERN = Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE)
+
+private fun nonEmptyTrimmedLines(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+
+/** yt-dlp's key for a flat-playlist entry's playlist title (falls back to the older "playlist" key). */
+private fun JSONObject.playlistTitle(): String? =
+    optString("playlist_title").takeIf(String::isNotBlank) ?: optString("playlist").takeIf(String::isNotBlank)
+
+/** Parses one JSON object per non-blank output line, skipping any line that isn't valid JSON. */
+private fun parsePlaylistJsonLines(output: String): List<JSONObject> =
+    nonEmptyTrimmedLines(output).mapNotNull { runCatching { JSONObject(it) }.getOrNull() }
+
+/** Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. */
+private fun toEntryMap(entry: JSONObject): Map<String, Any?> {
+    val id = entry.optString("id", "")
+    val thumbnails = entry.optJSONArray("thumbnails")
+    val thumbnail = thumbnails?.takeIf { it.length() > 0 }
+        ?.getJSONObject(thumbnails.length() - 1)?.optString("url")
+        ?: id.takeIf(String::isNotEmpty)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+    return mapOf(
+        "id" to id,
+        "url" to (entry.optString("webpage_url").takeIf(String::isNotBlank) ?: entry.optString("url")),
+        "title" to entry.optString("title", id),
+        "thumbnail" to thumbnail,
+        "duration" to if (entry.has("duration") && !entry.isNull("duration")) entry.optDouble("duration") else null
+    )
+}
 
 /** Mirrors isValidYoutubeUrl() in server/src/validate.ts. */
 private fun isValidYoutubeUrl(url: String): Boolean {
@@ -134,9 +171,16 @@ object DownloadQueue {
         }
     }
 
-    fun enqueue(context: Context, url: String, format: String, quality: String): String {
+    fun enqueue(
+        context: Context,
+        url: String,
+        format: String,
+        quality: String,
+        groupId: String? = null,
+        groupTitle: String? = null
+    ): String {
         val appContext = context.applicationContext
-        val job = DownloadJob(UUID.randomUUID().toString(), url, format, quality)
+        val job = DownloadJob(UUID.randomUUID().toString(), url, format, quality, groupId, groupTitle)
         synchronized(lock) { jobs.add(job) }
         touch()
 
@@ -147,6 +191,37 @@ object DownloadQueue {
         }
         synchronized(lock) { coroutines[job.id] = coroutine }
         return job.id
+    }
+
+    /**
+     * Lists one page of a playlist's entries (1-indexed, inclusive range), without downloading
+     * anything. Mirrors getPlaylistInfo() in server/src/youtube.ts (same --flat-playlist
+     * --dump-json flags, same bundled yt-dlp binary). Paged so the UI can virtualize/infinite-scroll
+     * instead of enumerating an entire (potentially thousand-video) playlist upfront.
+     */
+    suspend fun getPlaylistInfo(
+        context: Context,
+        url: String,
+        start: Int = 1,
+        count: Int = PLAYLIST_PAGE_SIZE
+    ): Map<String, Any?> = withContext(Dispatchers.IO) {
+        if (!isValidYoutubeUrl(url)) {
+            throw IllegalArgumentException("Ungültiger Link – nur YouTube wird unterstützt.")
+        }
+        prepare(context.applicationContext)
+
+        val request = YoutubeDLRequest(url)
+            .addOption("--flat-playlist")
+            .addOption("--dump-json")
+            .addOption("--no-warnings")
+            .addOption("--playlist-items", "$start-${start + count - 1}")
+        val output = YoutubeDL.getInstance().execute(request, UUID.randomUUID().toString(), false, null).out
+        val parsed = parsePlaylistJsonLines(output)
+
+        val title = parsed.firstOrNull()?.playlistTitle() ?: "Playlist"
+        val totalCount = parsed.firstOrNull()?.let { if (it.has("playlist_count")) it.optInt("playlist_count") else null }
+        val entries = parsed.map { toEntryMap(it) }
+        mapOf("title" to title, "entries" to entries, "totalCount" to totalCount)
     }
 
     fun cancel(id: String) {
@@ -202,20 +277,7 @@ object DownloadQueue {
             val outputDir = File(context.cacheDir, OUTPUT_DIR_NAME).apply { mkdirs() }
             advance(job, JobPhase.DOWNLOADING)
 
-            val request = buildRequest(job, File(outputDir, "${job.id}.%(ext)s").absolutePath)
-            YoutubeDL.getInstance().execute(request, job.id, false) { progress, eta, line ->
-                onOutput(job, progress, eta, line)
-            }
-
-            val produced = File(outputDir, "${job.id}.$ext")
-            if (!produced.exists()) {
-                throw IllegalStateException("yt-dlp hat keine Datei erzeugt.")
-            }
-            // yt-dlp names the file by job id (a UUID); rename to the video title so both the
-            // share sheet and the save-to-Downloads flow offer a real, human filename.
-            job.filePath = renameToTitledFile(produced, job.title ?: job.url, ext).absolutePath
-            job.progress = 100.0
-            job.etaSeconds = 0
+            downloadAndFinalize(job, outputDir, ext)
             advance(job, JobPhase.DONE)
         } catch (cancelled: YoutubeDL.CanceledException) {
             advance(job, JobPhase.CANCELLED)
@@ -235,6 +297,28 @@ object DownloadQueue {
     }
 
     /**
+     * Runs the actual yt-dlp download, verifies a file was produced, renames it to the video title,
+     * and records the resulting path on the job. Throws on failure — the caller (runJob) handles
+     * cancellation/error routing.
+     */
+    private fun downloadAndFinalize(job: DownloadJob, outputDir: File, ext: String) {
+        val request = buildRequest(job, File(outputDir, "${job.id}.%(ext)s").absolutePath)
+        YoutubeDL.getInstance().execute(request, job.id, false) { progress, eta, line ->
+            onOutput(job, progress, eta, line)
+        }
+
+        val produced = File(outputDir, "${job.id}.$ext")
+        if (!produced.exists()) {
+            throw IllegalStateException("yt-dlp hat keine Datei erzeugt.")
+        }
+        // yt-dlp names the file by job id (a UUID); rename to the video title so both the
+        // share sheet and the save-to-Downloads flow offer a real, human filename.
+        job.filePath = renameToTitledFile(produced, job.title ?: job.url, ext).absolutePath
+        job.progress = 100.0
+        job.etaSeconds = 0
+    }
+
+    /**
      * The --print option implies --simulate, so this only resolves the name. Much cheaper than
      * dumping the full metadata JSON, and cancellable because it runs under the process id of the job.
      */
@@ -244,12 +328,12 @@ object DownloadQueue {
             .addOption("--no-warnings")
             .addOption("--print", "title")
         val output = YoutubeDL.getInstance().execute(request, job.id, false, null).out
-        return output.lines().map { it.trim() }.lastOrNull { it.isNotEmpty() } ?: job.url
+        return nonEmptyTrimmedLines(output).lastOrNull() ?: job.url
     }
 
     /** Mirrors sanitizeFilename() in server/src/index.ts and app/App.tsx. */
     private fun sanitizeFilename(name: String): String {
-        val cleaned = name.replace(Regex("[\\\\/:*?\"<>|]"), "").trim()
+        val cleaned = name.replace(ILLEGAL_FILENAME_CHARS, "").trim()
         return cleaned.ifEmpty { "download" }
     }
 
@@ -335,7 +419,7 @@ object DownloadQueue {
      */
     private fun describeError(error: Throwable): String {
         val raw = describeErrorRaw(error)
-        return if (Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE).containsMatchIn(raw)) {
+        return if (SIGN_IN_GATE_PATTERN.containsMatchIn(raw)) {
             "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
         } else {
             raw
@@ -358,9 +442,8 @@ object DownloadQueue {
             }
             return error::class.java.simpleName
         }
-        return raw.lines()
-            .map { it.trim() }
-            .lastOrNull { it.isNotEmpty() }
+        return nonEmptyTrimmedLines(raw)
+            .lastOrNull()
             ?.removePrefix("ERROR: ")
             ?: raw
     }

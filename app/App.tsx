@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Animated,
@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Platform,
   Modal,
+  FlatList,
   useWindowDimensions,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -20,7 +21,17 @@ import Constants from "expo-constants";
 import * as MailComposer from "expo-mail-composer";
 import * as Sharing from "expo-sharing";
 import { downloader } from "./downloader";
-import { PHASE_LABELS, type JobPhase, type JobState, type MediaFormat, type PreviewPatch, type SetupState, type VideoInfo } from "./downloader/types";
+import {
+  PHASE_LABELS,
+  type JobPhase,
+  type JobState,
+  type MediaFormat,
+  type PlaylistEntry,
+  type PlaylistInfo,
+  type PreviewPatch,
+  type SetupState,
+  type VideoInfo,
+} from "./downloader/types";
 
 // Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
 const PREVIEW_DEBOUNCE_MS = 600;
@@ -28,9 +39,32 @@ const PREVIEW_DEBOUNCE_MS = 600;
 // Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
 const WIDE_LAYOUT_BREAKPOINT = 700;
 
+// A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
+// a single video that happens to be playing within one.
+const PLAYLIST_URL_PATTERN = /[?&]list=/;
+
+/** Opaque client-side grouping key — never sent anywhere, just used to cluster job cards in the UI. */
+function generateGroupId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 interface QualityOption {
   value: string;
   label: string;
+}
+
+/** State backing the playlist-selection picker; url is only needed to fetch further pages. */
+interface PlaylistPickerState {
+  url: string;
+  info: PlaylistInfo;
+  selected: Set<string>;
+  isLoadingMore: boolean;
+  /** Set once a page comes back empty — stops further paging even if totalCount is missing/never reached. */
+  noMorePages: boolean;
+}
+
+function isAllPlaylistEntriesSelected(picker: Pick<PlaylistPickerState, "info" | "selected">): boolean {
+  return picker.selected.size === picker.info.entries.length;
 }
 
 const FORMAT_OPTIONS: { value: MediaFormat; label: string }[] = [
@@ -95,6 +129,17 @@ function sanitizeFilename(name: string): string {
 
 function isFinishedPhase(phase: JobPhase): boolean {
   return phase === "done" || phase === "error" || phase === "cancelled";
+}
+
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
+/** Label for the playlist picker's confirm button — adapts to format, count, and singular/plural. */
+function playlistConfirmLabel(format: MediaFormat, count: number): string {
+  if (count === 0) return "Nichts ausgewählt";
+  const noun = format === "audio" ? pluralize(count, "Audio", "Audios") : pluralize(count, "Video", "Videos");
+  return `${count} ${noun} herunterladen`;
 }
 
 function Dropdown<T extends string>({
@@ -233,10 +278,8 @@ function JobCard({
 
       {job.phase === "error" ? (
         <Text style={styles.errorText}>{job.error}</Text>
-      ) : job.phase === "cancelled" ? (
-        <Text style={styles.statusText}>Abgebrochen</Text>
-      ) : job.phase === "done" ? (
-        <Text style={styles.statusText}>Fertig!</Text>
+      ) : job.phase === "done" || job.phase === "cancelled" ? (
+        <Text style={styles.statusText}>{PHASE_LABELS[job.phase]}</Text>
       ) : (
         <>
           <Pressable
@@ -353,6 +396,107 @@ function JobCard({
   );
 }
 
+function PlaylistEntryRow({
+  entry,
+  checked,
+  onToggle,
+}: {
+  entry: PlaylistEntry;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable style={styles.playlistEntryRow} onPress={onToggle}>
+      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+        {checked && <Text style={styles.checkboxMark}>✓</Text>}
+      </View>
+      {entry.thumbnail && <Image source={{ uri: entry.thumbnail }} style={styles.playlistEntryThumbnail} />}
+      <View style={styles.playlistEntryInfo}>
+        <Text style={styles.playlistEntryTitle} numberOfLines={2}>
+          {entry.title}
+        </Text>
+        {entry.duration != null && entry.duration > 0 && (
+          <Text style={styles.previewMeta}>{formatDuration(entry.duration)}</Text>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function PlaylistPickerModal({
+  picker,
+  format,
+  onToggleEntry,
+  onToggleAll,
+  onLoadMore,
+  onConfirm,
+  onCancel,
+}: {
+  picker: Omit<PlaylistPickerState, "url"> | null;
+  format: MediaFormat;
+  onToggleEntry: (id: string) => void;
+  onToggleAll: () => void;
+  onLoadMore: () => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  // Conditionally rendering the Modal element itself (instead of always rendering it with a
+  // toggled `visible` prop) so closing it fully unmounts the portal — react-native-web's Modal was
+  // observed staying visible with stale/empty content after `visible` flipped to false shortly
+  // after an async state update (the infinite-scroll page load), even though the underlying
+  // `picker` state had already gone back to null.
+  if (!picker) return null;
+
+  const allSelected = isAllPlaylistEntriesSelected(picker);
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel}>
+      <Pressable style={styles.dropdownOverlay} onPress={onCancel}>
+        <View style={styles.playlistModal}>
+          <Text style={styles.playlistModalTitle} numberOfLines={2}>
+            {picker.info.title}
+            {picker.info.totalCount != null ? ` (${picker.info.totalCount})` : ""}
+          </Text>
+          <Pressable style={styles.linkButton} onPress={onToggleAll}>
+            <Text style={styles.linkText}>{allSelected ? "Alle abwählen" : "Alle auswählen"}</Text>
+          </Pressable>
+          {/* FlatList virtualizes rows (only mounts what's on screen) so playlists with thousands of
+              entries stay smooth, and onEndReached drives infinite-scroll paging. */}
+          <FlatList
+            style={styles.playlistEntryList}
+            data={picker.info.entries}
+            keyExtractor={(entry) => entry.id}
+            renderItem={({ item }) => (
+              <PlaylistEntryRow
+                entry={item}
+                checked={picker.selected.has(item.id)}
+                onToggle={() => onToggleEntry(item.id)}
+              />
+            )}
+            onEndReachedThreshold={0.5}
+            onEndReached={onLoadMore}
+            ListFooterComponent={
+              picker.isLoadingMore ? <Text style={styles.searchMessage}>Lädt weitere Videos…</Text> : null
+            }
+          />
+          <View style={styles.jobActions}>
+            <Pressable style={styles.secondaryButton} onPress={onCancel}>
+              <Text style={styles.buttonText}>Abbrechen</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.button, picker.selected.size === 0 && styles.buttonDisabled]}
+              onPress={onConfirm}
+              disabled={picker.selected.size === 0}
+            >
+              <Text style={styles.buttonText}>{playlistConfirmLabel(format, picker.selected.size)}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("audio");
@@ -365,6 +509,8 @@ export default function App() {
   const [isSendingLog, setIsSendingLog] = useState(false);
   const [preview, setPreview] = useState<{ url: string; info: VideoInfo } | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [playlistPicker, setPlaylistPicker] = useState<PlaylistPickerState | null>(null);
+  const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   // Tracks the in-flight/last preview fetch so a download that starts before the debounce timer
   // fires can still patch title/duration/thumbnail onto the job once it resolves.
   const previewRequestRef = useRef<{ url: string; promise: Promise<VideoInfo | null> } | null>(null);
@@ -386,7 +532,7 @@ export default function App() {
   useEffect(() => {
     if (!downloader.getVideoInfo) return;
     const trimmed = url.trim();
-    if (!trimmed) {
+    if (!trimmed || PLAYLIST_URL_PATTERN.test(trimmed)) {
       setPreview(null);
       setIsPreviewLoading(false);
       return;
@@ -426,7 +572,7 @@ export default function App() {
     targetUrl: string,
     targetFormat: MediaFormat,
     targetQuality: string,
-    info: PreviewPatch | null = null
+    info: (PreviewPatch & { groupId?: string | null; groupTitle?: string | null }) | null = null
   ): Promise<string | null> {
     setSubmitError(null);
     setIsSubmitting(true);
@@ -438,6 +584,8 @@ export default function App() {
         title: info?.title,
         durationSeconds: info?.duration,
         thumbnail: info?.thumbnail,
+        groupId: info?.groupId,
+        groupTitle: info?.groupTitle,
       });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Herunterladen fehlgeschlagen.");
@@ -449,7 +597,28 @@ export default function App() {
 
   async function handleConvert() {
     const targetUrl = url.trim();
-    if (!targetUrl || isSubmitting) return;
+    if (!targetUrl || isSubmitting || isPlaylistLoading) return;
+
+    if (PLAYLIST_URL_PATTERN.test(targetUrl)) {
+      setSubmitError(null);
+      setIsPlaylistLoading(true);
+      try {
+        const info = await downloader.getPlaylistInfo(targetUrl, 1);
+        setPlaylistPicker({
+          url: targetUrl,
+          info,
+          selected: new Set(info.entries.map((entry) => entry.id)),
+          isLoadingMore: false,
+          noMorePages: info.entries.length === 0,
+        });
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Playlist konnte nicht geladen werden.");
+      } finally {
+        setIsPlaylistLoading(false);
+      }
+      return;
+    }
+
     setUrl("");
 
     // Starts the job right away with whatever preview info is already resolved; title/duration/
@@ -463,6 +632,80 @@ export default function App() {
       const infoPromise = pending?.url === targetUrl ? pending.promise : downloader.getVideoInfo(targetUrl).catch(() => null);
       infoPromise.then((info) => {
         if (info) downloader.updateJobPreview!(jobId, info);
+      });
+    }
+  }
+
+  // Applies `update` only while the picker is still open — it can fire after the user already
+  // closed it (e.g. a slow loadMorePlaylistEntries() page arriving after Abbrechen).
+  function updatePlaylistPicker(update: (current: PlaylistPickerState) => PlaylistPickerState) {
+    setPlaylistPicker((current) => (current ? update(current) : current));
+  }
+
+  function togglePlaylistEntry(id: string) {
+    updatePlaylistPicker((current) => {
+      const selected = new Set(current.selected);
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      return { ...current, selected };
+    });
+  }
+
+  function togglePlaylistSelectAll() {
+    updatePlaylistPicker((current) => {
+      const selected = isAllPlaylistEntriesSelected(current)
+        ? new Set<string>()
+        : new Set(current.info.entries.map((entry) => entry.id));
+      return { ...current, selected };
+    });
+  }
+
+  async function loadMorePlaylistEntries() {
+    if (!playlistPicker || playlistPicker.isLoadingMore || playlistPicker.noMorePages) return;
+    const { url: playlistUrl, info } = playlistPicker;
+    if (info.totalCount != null && info.entries.length >= info.totalCount) return;
+
+    updatePlaylistPicker((current) => ({ ...current, isLoadingMore: true }));
+    try {
+      const nextPage = await downloader.getPlaylistInfo(playlistUrl, info.entries.length + 1);
+      updatePlaylistPicker((current) => {
+        // New entries arrive pre-selected, matching the initial page's default.
+        const selected = new Set(current.selected);
+        for (const entry of nextPage.entries) selected.add(entry.id);
+        return {
+          ...current,
+          info: { ...current.info, entries: [...current.info.entries, ...nextPage.entries] },
+          selected,
+          isLoadingMore: false,
+          // Guards against endlessly re-fetching empty pages if totalCount is ever missing or the
+          // loaded count never quite reaches it (e.g. entries removed from the playlist mid-scroll).
+          noMorePages: nextPage.entries.length === 0,
+        };
+      });
+    } catch {
+      // Silently stop paging on error — the entries already loaded stay usable, and the user can
+      // still confirm with whatever loaded so far.
+      updatePlaylistPicker((current) => ({ ...current, isLoadingMore: false }));
+    }
+  }
+
+  async function confirmPlaylistDownload() {
+    if (!playlistPicker) return;
+    const { info, selected } = playlistPicker;
+    const entries = info.entries.filter((entry) => selected.has(entry.id));
+    const groupId = generateGroupId();
+    setPlaylistPicker(null);
+    setUrl("");
+
+    // Sequential, not Promise.all: keeps job cards appearing in playlist order and avoids firing a
+    // burst of simultaneous yt-dlp processes for large playlists (no server-side concurrency limit yet).
+    for (const entry of entries) {
+      await submit(entry.url, format, quality, {
+        title: entry.title,
+        duration: entry.duration,
+        thumbnail: entry.thumbnail,
+        groupId,
+        groupTitle: info.title,
       });
     }
   }
@@ -529,6 +772,7 @@ export default function App() {
         </Pressable>
       </View>
 
+      {isPlaylistLoading && <Text style={styles.searchMessage}>Lade Playlist…</Text>}
       {isPreviewLoading && !preview && <Text style={styles.searchMessage}>Suche Video…</Text>}
       {preview && (
         <View style={styles.previewCard}>
@@ -556,15 +800,55 @@ export default function App() {
       </View>
 
       <Pressable
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
+        style={[styles.button, (isSubmitting || isPlaylistLoading) && styles.buttonDisabled]}
         onPress={handleConvert}
-        disabled={isSubmitting}
+        disabled={isSubmitting || isPlaylistLoading}
       >
-        <Text style={styles.buttonText}>{isSubmitting ? "Wird gestartet…" : "Herunterladen"}</Text>
+        <Text style={styles.buttonText}>
+          {isPlaylistLoading ? "Lädt Playlist…" : isSubmitting ? "Wird gestartet…" : "Herunterladen"}
+        </Text>
       </Pressable>
       {submitError && <Text style={styles.errorText}>{submitError}</Text>}
     </>
   );
+
+  // Consecutive jobs sharing a groupId (a playlist download) get one summary header above their
+  // cards instead of each card repeating the playlist title. One pass to tally each group's
+  // done/total counts, then one render pass, instead of re-filtering the whole list per group.
+  const groupStats = new Map<string, { total: number; done: number }>();
+  for (const job of jobs) {
+    if (!job.groupId) continue;
+    const stats = groupStats.get(job.groupId) ?? { total: 0, done: 0 };
+    stats.total += 1;
+    if (isFinishedPhase(job.phase)) stats.done += 1;
+    groupStats.set(job.groupId, stats);
+  }
+
+  const renderedJobs: ReactNode[] = [];
+  const seenGroupIds = new Set<string>();
+  for (const job of jobs) {
+    if (job.groupId && !seenGroupIds.has(job.groupId)) {
+      seenGroupIds.add(job.groupId);
+      const stats = groupStats.get(job.groupId)!;
+      renderedJobs.push(
+        <Text key={`group-${job.groupId}`} style={styles.groupHeader}>
+          {job.groupTitle ?? "Playlist"} — {stats.done}/{stats.total} fertig
+        </Text>
+      );
+    }
+    renderedJobs.push(
+      <JobCard
+        key={job.id}
+        job={job}
+        now={now}
+        onCancel={() => downloader.cancel(job.id)}
+        onRetry={() => submit(job.url, job.format, job.quality, job)}
+        onShare={() => handleShare(job)}
+        isSharing={sharingId === job.id}
+        onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
+      />
+    );
+  }
 
   const jobsSection = jobs.length > 0 && (
     <>
@@ -579,18 +863,7 @@ export default function App() {
       <ScrollView
         style={[styles.jobList, useTwoColumnLayout && !hasFinishedJob && styles.flushTop]}
       >
-        {jobs.map((job) => (
-          <JobCard
-            key={job.id}
-            job={job}
-            now={now}
-            onCancel={() => downloader.cancel(job.id)}
-            onRetry={() => submit(job.url, job.format, job.quality, job)}
-            onShare={() => handleShare(job)}
-            isSharing={sharingId === job.id}
-            onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
-          />
-        ))}
+        {renderedJobs}
       </ScrollView>
     </>
   );
@@ -623,6 +896,15 @@ export default function App() {
           </>
         )}
       </View>
+      <PlaylistPickerModal
+        picker={playlistPicker}
+        format={format}
+        onToggleEntry={togglePlaylistEntry}
+        onToggleAll={togglePlaylistSelectAll}
+        onLoadMore={loadMorePlaylistEntries}
+        onConfirm={confirmPlaylistDownload}
+        onCancel={() => setPlaylistPicker(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -952,5 +1234,69 @@ const styles = StyleSheet.create({
     color: "#a0a0a0",
     textDecorationLine: "underline",
     fontSize: 13,
+  },
+  groupHeader: {
+    color: "#a0a0a0",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  playlistModal: {
+    width: "100%",
+    maxWidth: 480,
+    height: "85%",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    padding: 20,
+    gap: 10,
+  },
+  playlistModalTitle: {
+    color: "#f0f0f0",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  playlistEntryList: {
+    flex: 1,
+  },
+  playlistEntryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  playlistEntryThumbnail: {
+    width: 64,
+    height: 36,
+    borderRadius: 4,
+    backgroundColor: "#0d0d0d",
+  },
+  playlistEntryInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  playlistEntryTitle: {
+    color: "#f0f0f0",
+    fontSize: 13,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: "#646cff",
+    borderColor: "#646cff",
+  },
+  checkboxMark: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

@@ -28,7 +28,9 @@ class DownloadJob(
     val id: String,
     val url: String,
     val format: String,
-    val quality: String
+    val quality: String,
+    val groupId: String? = null,
+    val groupTitle: String? = null
 ) {
     @Volatile
     var phase: JobPhase = JobPhase.QUEUED
@@ -73,6 +75,8 @@ class DownloadJob(
         "url" to url,
         "format" to format,
         "quality" to quality,
+        "groupId" to groupId,
+        "groupTitle" to groupTitle,
         "phase" to phase.jsName,
         "title" to title,
         "progress" to progress,

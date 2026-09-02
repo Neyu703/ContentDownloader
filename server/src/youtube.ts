@@ -45,6 +45,21 @@ export interface ConvertResult {
   ext: "mp3" | "mp4";
 }
 
+export interface PlaylistEntry {
+  id: string;
+  url: string;
+  title: string;
+  thumbnail: string | null;
+  duration: number | null;
+}
+
+export interface PlaylistInfo {
+  title: string;
+  entries: PlaylistEntry[];
+  /** Total number of videos in the playlist, so the UI knows whether more pages remain. */
+  totalCount: number | null;
+}
+
 export interface ProgressUpdate {
   stage: "fetching_info" | "downloading" | "converting";
   message: string;
@@ -55,6 +70,10 @@ export interface ProgressUpdate {
   eta?: string;
 }
 
+// Matches yt-dlp's --newline progress output, e.g. "[download]  42.3% of ~10.00MiB at 1.20MiB/s ETA 00:07".
+const DOWNLOAD_PROGRESS_PATTERN =
+  /\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\w+)(?:\s+at\s+([\d.]+\w+\/s|Unknown speed))?(?:\s+ETA\s+(\S+))?/;
+
 function parseSizeToMB(text: string): number | null {
   const match = text.match(/([\d.]+)\s*(K|M|G)?i?B/i);
   if (!match) return null;
@@ -64,33 +83,38 @@ function parseSizeToMB(text: string): number | null {
   return value * multiplier;
 }
 
+/**
+ * Builds a stream `data` handler that always accumulates the full text (for callers that need the
+ * complete stdout/stderr, e.g. to JSON.parse it), and additionally splits it into lines and calls
+ * `onLine` per line — buffering the trailing partial line across chunks — when `onLine` is given.
+ */
+function makeChunkHandler(accumulate: (text: string) => void, onLine?: (line: string) => void, linePrefix = "") {
+  let lineBuffer = "";
+  return (chunk: Buffer) => {
+    const text = chunk.toString();
+    accumulate(text);
+    if (!onLine) return;
+    lineBuffer += text;
+    const lines = lineBuffer.split("\n");
+    lineBuffer = lines.pop() ?? "";
+    for (const line of lines) onLine(linePrefix + line);
+  };
+}
+
 function runYtDlp(args: string[], onLine?: (line: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn("yt-dlp", onLine ? [...args, "--newline", "--no-color"] : args, { windowsHide: true });
 
     let stdout = "";
     let stderr = "";
-    let buffer = "";
-    let errBuffer = "";
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stdout += text;
-      if (!onLine) return;
-      buffer += text;
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) onLine(line);
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      stderr += text;
-      if (!onLine) return;
-      errBuffer += text;
-      const lines = errBuffer.split("\n");
-      errBuffer = lines.pop() ?? "";
-      for (const line of lines) onLine(`[stderr] ${line}`);
-    });
+    child.stdout.on(
+      "data",
+      makeChunkHandler((text) => (stdout += text), onLine)
+    );
+    child.stderr.on(
+      "data",
+      makeChunkHandler((text) => (stderr += text), onLine, "[stderr] ")
+    );
 
     child.on("error", (err) => reject(err));
     child.on("close", (code) => {
@@ -154,6 +178,89 @@ export async function getVideoInfo(url: string): Promise<VideoInfo> {
   };
 }
 
+/** How many playlist entries getPlaylistInfo() lists per call — mirrored by PAGE_SIZE in DownloadQueue.kt. */
+export const PLAYLIST_PAGE_SIZE = 50;
+
+/**
+ * Lists one page of a playlist's entries (1-indexed, inclusive range), without downloading
+ * anything. Paged so the UI can virtualize/infinite-scroll instead of enumerating an entire
+ * (potentially thousand-video) playlist upfront.
+ */
+export async function getPlaylistInfo(
+  url: string,
+  start = 1,
+  count = PLAYLIST_PAGE_SIZE
+): Promise<PlaylistInfo> {
+  // --flat-playlist skips per-video metadata fetches (title/thumbnail/duration still come along for
+  // YouTube), so listing a page stays fast. Deliberately no --no-playlist here — this is the one
+  // call site that must resolve a playlist link into its entries instead of rejecting it.
+  const stdout = await runYtDlp([
+    "--flat-playlist",
+    "--dump-json",
+    "--no-warnings",
+    "--no-plugin-dirs",
+    "--playlist-items",
+    `${start}-${start + count - 1}`,
+    url,
+  ]);
+  const entries: PlaylistEntry[] = [];
+  let title = "Playlist";
+  let totalCount: number | null = null;
+  let sawFirstLine = false;
+
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    const data = JSON.parse(line);
+    if (!sawFirstLine) {
+      sawFirstLine = true;
+      title = data.playlist_title ?? data.playlist ?? "Playlist";
+      totalCount = typeof data.playlist_count === "number" ? data.playlist_count : null;
+    }
+    const thumbnails = Array.isArray(data.thumbnails) ? data.thumbnails : [];
+    entries.push({
+      id: data.id,
+      url: data.webpage_url ?? data.url,
+      title: data.title ?? data.id,
+      thumbnail: thumbnails.at(-1)?.url ?? (data.id ? `https://i.ytimg.com/vi/${data.id}/hqdefault.jpg` : null),
+      duration: data.duration ?? null,
+    });
+  }
+
+  return { title, entries, totalCount };
+}
+
+/** Interprets one line of yt-dlp's --newline output as a progress update, or null if it's not one. */
+function parseProgressLine(line: string, format: MediaFormat): ProgressUpdate | null {
+  const downloadMatch = line.match(DOWNLOAD_PROGRESS_PATTERN);
+  if (downloadMatch) {
+    const pct = parseFloat(downloadMatch[1]);
+    const totalMB = parseSizeToMB(downloadMatch[2]);
+    const speedMBs = downloadMatch[3] && downloadMatch[3] !== "Unknown speed" ? parseSizeToMB(downloadMatch[3]) : null;
+    const eta = downloadMatch[4] && downloadMatch[4] !== "Unknown" ? downloadMatch[4] : null;
+    const downloadedMB = totalMB != null ? (totalMB * pct) / 100 : null;
+    return {
+      stage: "downloading",
+      message: `Wird heruntergeladen… (${pct.toFixed(1)}%)`,
+      progress: pct,
+      downloadedMB: downloadedMB ?? undefined,
+      totalMB: totalMB ?? undefined,
+      speedMBs: speedMBs ?? undefined,
+      eta: eta ?? undefined,
+    };
+  }
+  if (line.includes("[ExtractAudio]") || line.includes("[ffmpeg]")) {
+    return {
+      stage: "converting",
+      message: format === "audio" ? "Konvertiere zu MP3…" : "Verarbeite Video…",
+      progress: null,
+    };
+  }
+  if (line.includes("[Merger]")) {
+    return { stage: "converting", message: "Führe Video und Audio zusammen…", progress: null };
+  }
+  return null;
+}
+
 function buildFormatArgs(format: MediaFormat, quality: string): string[] {
   if (format === "audio") {
     return [
@@ -210,37 +317,8 @@ export async function downloadMedia(
 
     await runYtDlp(downloadArgs, (line) => {
       log(line);
-      const downloadMatch = line.match(
-        /\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\w+)(?:\s+at\s+([\d.]+\w+\/s|Unknown speed))?(?:\s+ETA\s+(\S+))?/
-      );
-      if (downloadMatch) {
-        const pct = parseFloat(downloadMatch[1]);
-        const totalMB = parseSizeToMB(downloadMatch[2]);
-        const speedMBs =
-          downloadMatch[3] && downloadMatch[3] !== "Unknown speed" ? parseSizeToMB(downloadMatch[3]) : null;
-        const eta = downloadMatch[4] && downloadMatch[4] !== "Unknown" ? downloadMatch[4] : null;
-        const downloadedMB = totalMB != null ? (totalMB * pct) / 100 : null;
-        onProgress({
-          stage: "downloading",
-          message: `Wird heruntergeladen… (${pct.toFixed(1)}%)`,
-          progress: pct,
-          downloadedMB: downloadedMB ?? undefined,
-          totalMB: totalMB ?? undefined,
-          speedMBs: speedMBs ?? undefined,
-          eta: eta ?? undefined,
-        });
-        return;
-      }
-      if (line.includes("[ExtractAudio]") || line.includes("[ffmpeg]")) {
-        onProgress({
-          stage: "converting",
-          message: format === "audio" ? "Konvertiere zu MP3…" : "Verarbeite Video…",
-          progress: null,
-        });
-      }
-      if (line.includes("[Merger]")) {
-        onProgress({ stage: "converting", message: "Führe Video und Audio zusammen…", progress: null });
-      }
+      const update = parseProgressLine(line, format);
+      if (update) onProgress(update);
     });
 
     log("finished successfully");
