@@ -1,16 +1,10 @@
 import { NativeModule, requireNativeModule } from "expo-modules-core";
+import type { JobPhase, PlaylistEntry, PlaylistInfo, SetupPhase } from "../../shared-types";
 
-export type SetupPhase = "idle" | "preparing" | "updating" | "ready" | "failed";
-
-export type JobPhase =
-  | "queued"
-  | "fetching_info"
-  | "downloading"
-  | "converting"
-  | "merging"
-  | "done"
-  | "error"
-  | "cancelled";
+export type { JobPhase, SetupPhase };
+/** Native mirrors of the shared playlist types — same shape, kept under the "Native"-prefixed naming convention used throughout this file. */
+export type NativePlaylistEntry = PlaylistEntry;
+export type NativePlaylistInfo = PlaylistInfo;
 
 export interface NativeSetupState {
   phase: SetupPhase;
@@ -23,6 +17,8 @@ export interface NativeJob {
   url: string;
   format: "audio" | "video";
   quality: string;
+  groupId: string | null;
+  groupTitle: string | null;
   phase: JobPhase;
   title: string | null;
   progress: number | null;
@@ -49,7 +45,14 @@ type YtdlpEvents = {
 declare class NativeYtdlp extends NativeModule<YtdlpEvents> {
   initialize(): Promise<void>;
   getState(): Promise<NativeState>;
-  enqueue(url: string, format: "audio" | "video", quality: string): Promise<string>;
+  enqueue(
+    url: string,
+    format: "audio" | "video",
+    quality: string,
+    groupId: string | null,
+    groupTitle: string | null
+  ): Promise<string>;
+  getPlaylistInfo(url: string, start: number): Promise<NativePlaylistInfo>;
   cancel(id: string): Promise<void>;
   clearFinished(): Promise<void>;
   /** Writes the current log to a cache file and returns its absolute (non-URI) path. */

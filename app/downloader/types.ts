@@ -1,3 +1,7 @@
+import type { JobPhase, PlaylistEntry, PlaylistInfo, SetupPhase } from "../shared-types";
+
+export type { JobPhase, PlaylistEntry, PlaylistInfo, SetupPhase };
+
 export type MediaFormat = "audio" | "video";
 
 export interface VideoInfo {
@@ -9,21 +13,6 @@ export interface VideoInfo {
 
 /** Partial video metadata used to patch a job that was already started before the full preview arrived. */
 export type PreviewPatch = { title?: string | null; duration?: number | null; thumbnail?: string | null };
-
-/**
- * Every phase a download can be in, on both platforms. Web never produces "queued" (the server
- * starts jobs immediately) or "merging" (it only reports "converting"), but the union is shared so
- * the UI has one set of labels to maintain.
- */
-export type JobPhase =
-  | "queued"
-  | "fetching_info"
-  | "downloading"
-  | "converting"
-  | "merging"
-  | "done"
-  | "error"
-  | "cancelled";
 
 export interface JobState {
   id: string;
@@ -48,6 +37,9 @@ export interface JobState {
   error: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Set when this job was started as part of a playlist download; jobs share one groupId/groupTitle. */
+  groupId?: string | null;
+  groupTitle?: string | null;
 }
 
 export interface DownloadRequest {
@@ -58,10 +50,10 @@ export interface DownloadRequest {
   title?: string | null;
   durationSeconds?: number | null;
   thumbnail?: string | null;
+  /** Set when this request is one entry of a playlist download; jobs share one groupId/groupTitle. */
+  groupId?: string | null;
+  groupTitle?: string | null;
 }
-
-/** One-time setup before the first download can start. Native only unpacks/updates yt-dlp once. */
-export type SetupPhase = "idle" | "preparing" | "updating" | "ready" | "failed";
 
 export interface SetupState {
   phase: SetupPhase;
@@ -85,6 +77,11 @@ export interface Downloader {
   getVideoInfo?(url: string, signal?: AbortSignal): Promise<VideoInfo>;
   /** Web only — patches title/duration/thumbnail onto a job that was already started before the preview info arrived. */
   updateJobPreview?(id: string, info: PreviewPatch): void;
+  /**
+   * Lists one page of a playlist's entries (1-indexed start) without downloading anything.
+   * Implemented on both platforms.
+   */
+  getPlaylistInfo(url: string, start: number): Promise<PlaylistInfo>;
 }
 
 export const PHASE_LABELS: Record<JobPhase, string> = {

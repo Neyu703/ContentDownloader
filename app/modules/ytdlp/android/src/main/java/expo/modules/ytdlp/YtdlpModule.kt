@@ -38,8 +38,12 @@ class YtdlpModule : Module() {
             DownloadQueue.snapshot()
         }
 
-        AsyncFunction("enqueue") { url: String, format: String, quality: String ->
-            DownloadQueue.enqueue(appContext.reactContext!!, url, format, quality)
+        AsyncFunction("enqueue") { url: String, format: String, quality: String, groupId: String?, groupTitle: String? ->
+            DownloadQueue.enqueue(appContext.reactContext!!, url, format, quality, groupId, groupTitle)
+        }
+
+        AsyncFunction("getPlaylistInfo") Coroutine { url: String, start: Int ->
+            DownloadQueue.getPlaylistInfo(appContext.reactContext!!, url, start)
         }
 
         AsyncFunction("cancel") { id: String ->

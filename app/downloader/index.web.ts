@@ -1,4 +1,4 @@
-import type { Downloader, DownloadRequest, JobPhase, JobState, PreviewPatch, SetupState, VideoInfo } from "./types";
+import type { Downloader, DownloadRequest, JobPhase, JobState, PlaylistInfo, PreviewPatch, SetupState, VideoInfo } from "./types";
 
 const SERVER_URL = "http://localhost:3001";
 const POLL_INTERVAL_MS = 600;
@@ -64,9 +64,15 @@ async function parseError(res: Response): Promise<string> {
   }
 }
 
+const READY_SETUP: SetupState = { phase: "ready", message: "" };
+
+function sortedJobs(): JobState[] {
+  return Array.from(jobs.values()).sort((a, b) => a.createdAt - b.createdAt);
+}
+
 function notify() {
-  const list = Array.from(jobs.values()).sort((a, b) => a.createdAt - b.createdAt);
-  listeners.forEach((listener) => listener(list, { phase: "ready", message: "" }));
+  const list = sortedJobs();
+  listeners.forEach((listener) => listener(list, READY_SETUP));
 }
 
 function patchJob(id: string, patch: Partial<JobState>) {
@@ -131,10 +137,7 @@ function pollJob(id: string) {
 export const downloader: Downloader = {
   subscribe(listener) {
     listeners.add(listener);
-    listener(Array.from(jobs.values()).sort((a, b) => a.createdAt - b.createdAt), {
-      phase: "ready",
-      message: "",
-    });
+    listener(sortedJobs(), READY_SETUP);
     return () => listeners.delete(listener);
   },
 
@@ -169,6 +172,8 @@ export const downloader: Downloader = {
       error: null,
       createdAt: now,
       updatedAt: now,
+      groupId: request.groupId ?? null,
+      groupTitle: request.groupTitle ?? null,
     });
     notify();
     pollJob(jobId);
@@ -179,6 +184,14 @@ export const downloader: Downloader = {
     const res = await fetch(`${SERVER_URL}/api/info?url=${encodeURIComponent(url)}`, { signal });
     if (!res.ok) throw new Error(await parseError(res));
     return (await res.json()) as VideoInfo;
+  },
+
+  async getPlaylistInfo(url: string, start: number) {
+    const res = await fetch(
+      `${SERVER_URL}/api/playlist-info?url=${encodeURIComponent(url)}&start=${start}`
+    );
+    if (!res.ok) throw new Error(await parseError(res));
+    return (await res.json()) as PlaylistInfo;
   },
 
   updateJobPreview(id, info: PreviewPatch) {

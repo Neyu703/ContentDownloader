@@ -18,6 +18,8 @@ function toJobState(job: NativeJob): JobState {
     error: job.error,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
+    groupId: job.groupId,
+    groupTitle: job.groupTitle,
   };
 }
 
@@ -46,9 +48,12 @@ export const downloader: Downloader = {
     ensureInitialized().catch(() => {});
 
     let cancelled = false;
-    Ytdlp.getState().then((state) => {
-      if (!cancelled) listener(state.jobs.map(toJobState), toSetupState(state.setup));
-    });
+    function pushCurrentState() {
+      Ytdlp.getState().then((state) => {
+        if (!cancelled) listener(state.jobs.map(toJobState), toSetupState(state.setup));
+      });
+    }
+    pushCurrentState();
 
     const subscription = Ytdlp.addListener("onStateChange", (state) => {
       listener(state.jobs.map(toJobState), toSetupState(state.setup));
@@ -57,11 +62,7 @@ export const downloader: Downloader = {
     // Foreground-service updates land natively even while JS is suspended; re-sync on resume so
     // nothing that happened in the background is missed.
     const appStateSubscription = AppState.addEventListener("change", (next) => {
-      if (next === "active") {
-        Ytdlp.getState().then((state) => {
-          if (!cancelled) listener(state.jobs.map(toJobState), toSetupState(state.setup));
-        });
-      }
+      if (next === "active") pushCurrentState();
     });
 
     return () => {
@@ -73,14 +74,28 @@ export const downloader: Downloader = {
 
   async enqueue(request: DownloadRequest) {
     await ensureInitialized();
-    return Ytdlp.enqueue(request.url, request.format, request.quality);
+    return Ytdlp.enqueue(
+      request.url,
+      request.format,
+      request.quality,
+      request.groupId ?? null,
+      request.groupTitle ?? null
+    );
+  },
+
+  async getPlaylistInfo(url: string, start: number) {
+    await ensureInitialized();
+    return Ytdlp.getPlaylistInfo(url, start);
   },
 
   cancel(id: string) {
+    // Fire-and-forget — the resulting state change (or its absence, on failure) reaches the UI via
+    // the onStateChange event above regardless.
     Ytdlp.cancel(id).catch(() => {});
   },
 
   clearFinished() {
+    // Same fire-and-forget reasoning as cancel() above.
     Ytdlp.clearFinished().catch(() => {});
   },
 
