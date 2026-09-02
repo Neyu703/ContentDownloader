@@ -290,15 +290,5 @@ bieten und was davon für ContentDownloader übertragbar ist:
 
 **ID-Schema:** `<Abschnitt>-<Nummer>`, z.B. `1-1` = erste Idee in Abschnitt 1.
 
-**Branch-Namen (Positions-Vektor):** `feature/<v1>-<v2>-...-<vN>-<kurztitel>`, wobei Position *i*
-für Abschnitt *i* steht und der Wert dort die Item-Nummer aus diesem Abschnitt ist (`0` = nichts
-aus diesem Abschnitt dabei). Mehrere Ideen aus demselben Abschnitt werden mit `+` verbunden.
-Führende Nullen bleiben stehen (sonst stimmt die Positionszuordnung nicht mehr), Nullen nach dem
-letzten genutzten Abschnitt werden weggelassen. Beispiele:
-- Nur `1-1`: `feature/1-video-preview`
-- `1-1` + `4-2` + `7-3`: `feature/1-0-0-2-0-0-3-quick-wins`
-- `1-3` + `1-7` + `5-3` (zwei Ideen aus Abschnitt 1): `feature/3+7-0-0-0-3-batch-playlist-concurrency`
-- Nur `2-5`: `feature/0-0-0-0-5-download-verlauf`
-
-Checkbox abhaken = Idee ist auf dem jeweiligen Feature-Branch umgesetzt — direkt beim Umsetzen
-abhaken, nicht erst nach dem Merge in `main` (spart das Nachpflegen).
+Checkbox abhaken = Idee ist in `main` umgesetzt — wir arbeiten direkt auf `main`, kein
+Feature-Branch-Workflow, also einfach beim Commit abhaken.
