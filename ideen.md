@@ -41,7 +41,7 @@ nach Aufwand sortiert, klein → groß.
   (128/192/320 kbps, 360–1080p); `yt-dlp -F <url>` liefert die tatsächlich für das jeweilige
   Video verfügbaren Formate. Verhindert z.B. Downloads in "1080p", obwohl das Video nur in 480p
   vorliegt. **Aufwand: mittel**.
-- [ ] **[1-7] Playlist-Download** — `downloadMedia()` übergibt `--no-playlist` fest an yt-dlp; ein
+- [x] **[1-7] Playlist-Download** — `downloadMedia()` übergibt `--no-playlist` fest an yt-dlp; ein
   Playlist-Link lädt nur das erste Video. Auswahl "ganze Playlist" vs. "nur dieses Video" +
   Batch-Fortschritt (Job pro Video) wäre ein natürlicher nächster Schritt. **Aufwand: mittel–groß**
   (UI für Job-Gruppen, Server-seitige Queue).
@@ -286,7 +286,7 @@ bieten und was davon für ContentDownloader übertragbar ist:
 4. [ ] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
 5. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
    da er den Produktnamen einlöst
-6. [ ] [1-7] Playlist-Download
+6. [x] [1-7] Playlist-Download
 
 **ID-Schema:** `<Abschnitt>-<Nummer>`, z.B. `1-1` = erste Idee in Abschnitt 1.
 
