@@ -3,6 +3,10 @@ import { Platform } from "react-native";
 export const jobCardStyles = {
   jobList: {
     marginTop: 10,
+    flex: 1,
+    // Lets the ScrollView shrink below its content's natural height instead of forcing the card
+    // to overflow — a standard flexbox gotcha for scroll containers (flex:1 alone isn't enough).
+    minHeight: 0,
   },
   jobCard: {
     backgroundColor: "#151515",

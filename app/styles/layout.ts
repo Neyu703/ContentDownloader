@@ -15,6 +15,9 @@ export const layoutStyles = {
     borderWidth: 1,
     borderColor: "#2c2c2c",
     padding: 28,
+    // Clips content past maxHeight so the job list's own ScrollView (not this card) is the one
+    // scrollable region — without this, cards just overflow the rounded border with no scrollbar.
+    overflow: "hidden",
   },
   cardWide: {
     maxWidth: 920,
@@ -22,6 +25,11 @@ export const layoutStyles = {
   twoColumnRow: {
     flexDirection: "row",
     gap: 24,
+    // flex + minHeight: 0 so this row can actually be clamped by card's maxHeight instead of
+    // growing to its content's full height — every flex ancestor of a scrollable region needs
+    // both, not just the ScrollView itself (see jobCard.ts's jobList for the same reasoning).
+    flex: 1,
+    minHeight: 0,
   },
   twoColumnLeft: {
     flex: 1,
@@ -29,6 +37,7 @@ export const layoutStyles = {
   twoColumnRight: {
     flex: 1,
     minWidth: 0,
+    minHeight: 0,
   },
   title: {
     fontSize: 26,
