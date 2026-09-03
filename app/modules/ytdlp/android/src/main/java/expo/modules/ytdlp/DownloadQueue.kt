@@ -2,10 +2,8 @@ package expo.modules.ytdlp
 
 import android.content.Context
 import android.util.Log
-import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
-import com.yausername.youtubedl_android.YoutubeDLResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +17,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
@@ -36,98 +33,11 @@ private const val OUTPUT_DIR_NAME = "ytdlp"
 /** How many playlist entries getPlaylistInfo() lists per call — mirrors PLAYLIST_PAGE_SIZE in server/src/youtube.ts. */
 private const val PLAYLIST_PAGE_SIZE = 50
 
-private val YOUTUBE_HOSTS = setOf(
-    "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"
-)
-
 /** Characters not allowed in a filename on common filesystems. */
 private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
 
 /** yt-dlp's phrasing for YouTube's "Sign in to confirm you're not a bot" gate. */
 private val SIGN_IN_GATE_PATTERN = Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE)
-
-internal fun nonEmptyTrimmedLines(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-
-/** yt-dlp's key for a flat-playlist entry's playlist title (falls back to the older "playlist" key). */
-internal fun JSONObject.playlistTitle(): String? =
-    optString("playlist_title").takeIf(String::isNotBlank) ?: optString("playlist").takeIf(String::isNotBlank)
-
-/** Parses one JSON object per non-blank output line, skipping any line that isn't valid JSON. */
-internal fun parsePlaylistJsonLines(output: String): List<JSONObject> =
-    nonEmptyTrimmedLines(output).mapNotNull { runCatching { JSONObject(it) }.getOrNull() }
-
-/** Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. */
-internal fun toEntryMap(entry: JSONObject): Map<String, Any?> {
-    val id = entry.optString("id", "")
-    val thumbnails = entry.optJSONArray("thumbnails")
-    // getJSONObject() throws (never returns null) on a bad index, and optString(String) always
-    // returns a non-null string (defaulting to "") — no further null-checks are needed on either
-    // once thumbnails is confirmed non-empty.
-    val thumbnail = thumbnails?.takeIf { it.length() > 0 }?.let { it.getJSONObject(it.length() - 1).optString("url")!! }
-        ?: id.takeIf(String::isNotEmpty)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
-    return mapOf(
-        "id" to id,
-        "url" to (entry.optString("webpage_url").takeIf(String::isNotBlank) ?: entry.optString("url")),
-        "title" to entry.optString("title", id),
-        "thumbnail" to thumbnail,
-        "duration" to if (entry.has("duration") && !entry.isNull("duration")) entry.optDouble("duration") else null
-    )
-}
-
-/**
- * Seam over [YoutubeDL]'s singleton so [DownloadQueue] can be tested against a fake instead of the
- * real native binary. [RealYtdlpEngine] delegates 1:1 to the SDK and carries no logic of its own.
- */
-interface YtdlpEngine {
-    fun init(context: Context)
-    fun version(context: Context): String?
-    fun updateYoutubeDL(context: Context, channel: YoutubeDL.UpdateChannel)
-    fun execute(
-        request: YoutubeDLRequest,
-        processId: String,
-        redirectStderr: Boolean,
-        callback: ((progress: Float, etaInSeconds: Long, line: String) -> Unit)?
-    ): YoutubeDLResponse
-    fun destroyProcessById(id: String)
-}
-
-class RealYtdlpEngine : YtdlpEngine {
-    override fun init(context: Context) = YoutubeDL.getInstance().init(context)
-    override fun version(context: Context): String? = YoutubeDL.getInstance().version(context)
-    override fun updateYoutubeDL(context: Context, channel: YoutubeDL.UpdateChannel) {
-        YoutubeDL.getInstance().updateYoutubeDL(context, channel)
-    }
-    override fun execute(
-        request: YoutubeDLRequest,
-        processId: String,
-        redirectStderr: Boolean,
-        callback: ((progress: Float, etaInSeconds: Long, line: String) -> Unit)?
-    ): YoutubeDLResponse = YoutubeDL.getInstance().execute(request, processId, redirectStderr, callback)
-    override fun destroyProcessById(id: String) {
-        YoutubeDL.getInstance().destroyProcessById(id)
-    }
-}
-
-/** Same seam as [YtdlpEngine], for [FFmpeg]'s singleton. */
-interface FfmpegEngine {
-    fun init(context: Context)
-}
-
-class RealFfmpegEngine : FfmpegEngine {
-    override fun init(context: Context) = FFmpeg.getInstance().init(context)
-}
-
-/**
- * Mirrors isValidYoutubeUrl() in server/src/validate.ts. Android's Uri.parse() never throws
- * for a String argument (it has no real validation, unlike java.net.URI) — there is no
- * malformed input to catch here.
- */
-internal fun isValidYoutubeUrl(url: String): Boolean {
-    val uri = android.net.Uri.parse(url)
-    val scheme = uri.scheme?.lowercase()
-    if (scheme != "http" && scheme != "https") return false
-    return YOUTUBE_HOSTS.contains(uri.host?.lowercase())
-}
 
 /**
  * Owns every download, independent of whether any UI is attached. Lives in the application process,
