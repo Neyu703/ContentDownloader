@@ -221,6 +221,24 @@ describe("JobCard — details expand/collapse and debug lines", () => {
     await render(<JobCard job={{ ...BASE_JOB, lastLine: "" }} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
     expect(screen.queryByText("[download] 42%")).toBeNull();
   });
+
+  it("hides the details toggle and box entirely when there's nothing informative to show yet", async () => {
+    const emptyJob: JobState = {
+      ...BASE_JOB,
+      phase: "fetching_info",
+      progress: null,
+      totalMB: undefined,
+      downloadedMB: undefined,
+      speedMBs: undefined,
+      etaSeconds: null,
+      duration: null,
+      lastLine: "",
+    };
+    await render(<JobCard job={emptyJob} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.queryByTestId("job-debug-box")).toBeNull();
+    expect(screen.queryByLabelText("Details ausklappen")).toBeNull();
+    expect(screen.queryByLabelText("Details einklappen")).toBeNull();
+  });
 });
 
 describe("JobCard — actions", () => {

@@ -11,6 +11,7 @@ function toJobState(job: NativeJob): JobState {
     quality: job.quality,
     phase: job.phase,
     title: job.title,
+    thumbnail: job.thumbnail,
     progress: job.progress,
     etaSeconds: job.etaSeconds,
     lastLine: job.lastLine,

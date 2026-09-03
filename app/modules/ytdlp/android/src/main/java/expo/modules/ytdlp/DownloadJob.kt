@@ -15,6 +15,9 @@ enum class JobPhase(val jsName: String) {
         get() = this == DONE || this == ERROR || this == CANCELLED
 }
 
+/** Result of DownloadQueue.fetchMetadata() — a job's resolved title and (if any) thumbnail URL. */
+data class JobMetadata(val title: String, val thumbnail: String?)
+
 /** One-time preparation of the bundled binaries. Mirrored by `SetupPhase` in app/downloader/types.ts. */
 enum class SetupPhase(val jsName: String) {
     IDLE("idle"),
@@ -37,6 +40,9 @@ class DownloadJob(
 
     @Volatile
     var title: String? = null
+
+    @Volatile
+    var thumbnail: String? = null
 
     /** Percent 0..100, or null while unknown. */
     @Volatile
@@ -79,6 +85,7 @@ class DownloadJob(
         "groupTitle" to groupTitle,
         "phase" to phase.jsName,
         "title" to title,
+        "thumbnail" to thumbnail,
         "progress" to progress,
         "etaSeconds" to etaSeconds?.toDouble(),
         "lastLine" to lastLine,

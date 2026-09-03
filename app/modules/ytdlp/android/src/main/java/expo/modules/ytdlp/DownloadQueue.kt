@@ -41,6 +41,9 @@ private const val PLAYLIST_PAGE_SIZE = 50
 /** Characters not allowed in a filename on common filesystems. */
 private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
 
+/** Joins title/thumbnail in a single --print template so fetchMetadata() stays one lightweight yt-dlp call. */
+private const val METADATA_FIELD_SEPARATOR = "|||"
+
 /** yt-dlp's phrasing for YouTube's "Sign in to confirm you're not a bot" gate. */
 private val SIGN_IN_GATE_PATTERN = Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE)
 
@@ -234,7 +237,9 @@ object DownloadQueue {
 
             job.startedAt = System.currentTimeMillis()
             advance(job, JobPhase.FETCHING_INFO)
-            job.title = fetchTitle(job)
+            val metadata = fetchMetadata(job)
+            job.title = metadata.title
+            job.thumbnail = metadata.thumbnail
             if (job.phase == JobPhase.CANCELLED) return
 
             val ext = if (job.format == "audio") "mp3" else "mp4"
@@ -313,16 +318,22 @@ object DownloadQueue {
     internal fun isRetryableError(error: Throwable): Boolean = !isSignInGateError(describeErrorRaw(error))
 
     /**
-     * The --print option implies --simulate, so this only resolves the name. Much cheaper than
-     * dumping the full metadata JSON, and cancellable because it runs under the process id of the job.
+     * The --print option implies --simulate, so this only resolves title/thumbnail without a real
+     * download. Much cheaper than dumping the full metadata JSON, and cancellable because it runs
+     * under the process id of the job. Both fields come back on one line (yt-dlp's own template
+     * syntax), so the same "last non-empty line wins over any leading noise" heuristic still applies.
      */
-    internal fun fetchTitle(job: DownloadJob): String {
+    internal fun fetchMetadata(job: DownloadJob): JobMetadata {
         val request = YoutubeDLRequest(job.url)
             .addOption("--no-playlist")
             .addOption("--no-warnings")
-            .addOption("--print", "title")
+            .addOption("--print", "%(title)s$METADATA_FIELD_SEPARATOR%(thumbnail)s")
         val output = engine.execute(request, job.id, false, null).out
-        return nonEmptyTrimmedLines(output).lastOrNull() ?: job.url
+        val line = nonEmptyTrimmedLines(output).lastOrNull() ?: return JobMetadata(job.url, null)
+        val parts = line.split(METADATA_FIELD_SEPARATOR, limit = 2)
+        val title = parts.getOrNull(0)?.takeIf(String::isNotBlank) ?: job.url
+        val thumbnail = parts.getOrNull(1)?.takeIf { it.isNotBlank() && it != "NA" }
+        return JobMetadata(title, thumbnail)
     }
 
     /** Mirrors sanitizeFilename() in server/src/index.ts and app/App.tsx. */

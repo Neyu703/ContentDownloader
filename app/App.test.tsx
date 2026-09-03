@@ -482,6 +482,22 @@ describe("playlist picker interactions", () => {
     expect(screen.getByText("2 Audios herunterladen")).toBeTruthy();
   });
 
+  it("shows 'Alle abwählen' right after opening even when two entries share a duplicate id", async () => {
+    // A video can legitimately appear twice in the same YouTube playlist (re-added), so
+    // PlaylistEntry.id (the raw video id) isn't guaranteed unique across entries.
+    const getPlaylistInfo = jest.fn().mockResolvedValue(
+      makePlaylistInfo({
+        entries: [
+          { id: "dup", url: "https://youtube.com/watch?v=dup", title: "Video 1", thumbnail: null, duration: 60 },
+          { id: "dup", url: "https://youtube.com/watch?v=dup", title: "Video 2", thumbnail: null, duration: 60 },
+        ],
+        totalCount: 2,
+      })
+    );
+    await openPicker(getPlaylistInfo);
+    expect(screen.getByText("Alle abwählen")).toBeTruthy();
+  });
+
   it("loads more entries on end-reached and keeps them pre-selected", async () => {
     const getPlaylistInfo = jest
       .fn()

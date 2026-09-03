@@ -12,6 +12,7 @@ import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -65,6 +66,20 @@ class DownloadQueueTest {
     }
 
     private fun response(out: String) = YoutubeDLResponse(emptyList(), 0, 0L, out, "")
+
+    /**
+     * `enqueue()` launches its job on the real `Dispatchers.IO` (not this test's dispatcher), so
+     * without an explicit wait it can still be mid-flight when the test method returns. The next
+     * test's `@Before` reassigns `DownloadQueue.engine` before this coroutine would finish on its
+     * own, so a still-running one from a prior test ends up calling a *different* test's mock —
+     * exactly the kind of cross-test interference this closes off, by waiting for it here instead,
+     * against the mock this test itself set up.
+     */
+    private fun awaitEnqueuedJob(jobId: String) {
+        @Suppress("UNCHECKED_CAST")
+        val coroutine = (privateField("coroutines").get(DownloadQueue) as Map<String, Job>)[jobId]
+        runBlocking { coroutine?.join() }
+    }
 
     // --- hasPendingWork() / activeJob() / queuedCount() ---
 
@@ -183,15 +198,17 @@ class DownloadQueueTest {
         assertEquals("g1", job["groupId"])
         assertEquals("My Playlist", job["groupTitle"])
         assertEquals("queued", job["phase"])
+        awaitEnqueuedJob(id)
     }
 
     @Test
     fun `enqueue defaults groupId and groupTitle to null`() {
-        DownloadQueue.enqueue(context, "https://youtu.be/x", "audio", "320")
+        val id = DownloadQueue.enqueue(context, "https://youtu.be/x", "audio", "320")
 
         val job = (DownloadQueue.snapshot()["jobs"] as List<*>).single() as Map<*, *>
         assertNull(job["groupId"])
         assertNull(job["groupTitle"])
+        awaitEnqueuedJob(id)
     }
 
     // --- getPlaylistInfo() ---
@@ -388,7 +405,7 @@ class DownloadQueueTest {
     }
 
     @Test
-    fun `runJob stops after fetchTitle if the job was cancelled meanwhile`() = runTest {
+    fun `runJob stops after fetchMetadata if the job was cancelled meanwhile`() = runTest {
         val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
         every { engine.execute(any(), any(), any(), null) } answers {
             job.phase = JobPhase.CANCELLED
@@ -403,7 +420,7 @@ class DownloadQueueTest {
     @Test
     fun `runJob downloads successfully end to end and marks the job DONE`() = runTest {
         val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("My Video Title")
+        every { engine.execute(any(), any(), any(), null) } returns response("My Video Title|||https://example.com/thumb.jpg")
         every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
             val request = firstArg<YoutubeDLRequest>()
             val callback = arg<(Float, Long, String) -> Unit>(3)
@@ -416,6 +433,7 @@ class DownloadQueueTest {
 
         assertEquals(JobPhase.DONE, job.phase)
         assertEquals("My Video Title", job.title)
+        assertEquals("https://example.com/thumb.jpg", job.thumbnail)
         assertEquals("mp3", job.ext)
         assertEquals(100.0, job.progress)
         assertEquals(0L, job.etaSeconds)
@@ -553,22 +571,44 @@ class DownloadQueueTest {
         assertTrue(DownloadQueue.isRetryableError(RuntimeException("HTTP Error 403: Forbidden")))
     }
 
-    // --- fetchTitle() ---
+    // --- fetchMetadata() ---
 
     @Test
-    fun `fetchTitle returns the last non-empty output line`() {
+    fun `fetchMetadata parses title and thumbnail from the last non-empty combined output line`() {
         val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("A Title\n\n")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title|||https://example.com/thumb.jpg\n\n")
 
-        assertEquals("A Title", DownloadQueue.fetchTitle(job))
+        val metadata = DownloadQueue.fetchMetadata(job)
+
+        assertEquals("A Title", metadata.title)
+        assertEquals("https://example.com/thumb.jpg", metadata.thumbnail)
     }
 
     @Test
-    fun `fetchTitle falls back to the job url when the output is blank`() {
+    fun `fetchMetadata falls back to the job url and a null thumbnail when the output is blank`() {
         val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
         every { engine.execute(any(), any(), any(), null) } returns response("   ")
 
-        assertEquals(job.url, DownloadQueue.fetchTitle(job))
+        val metadata = DownloadQueue.fetchMetadata(job)
+
+        assertEquals(job.url, metadata.title)
+        assertNull(metadata.thumbnail)
+    }
+
+    @Test
+    fun `fetchMetadata treats yt-dlp's NA placeholder as no thumbnail`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title|||NA")
+
+        assertNull(DownloadQueue.fetchMetadata(job).thumbnail)
+    }
+
+    @Test
+    fun `fetchMetadata falls back to the job url when the title half is blank`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("|||https://example.com/thumb.jpg")
+
+        assertEquals(job.url, DownloadQueue.fetchMetadata(job).title)
     }
 
     // --- sanitizeFilename() / renameToTitledFile() ---
