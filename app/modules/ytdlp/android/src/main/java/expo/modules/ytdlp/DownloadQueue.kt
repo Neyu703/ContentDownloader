@@ -146,7 +146,7 @@ object DownloadQueue {
         groupTitle: String? = null
     ): String {
         val appContext = context.applicationContext
-        val job = DownloadJob(UUID.randomUUID().toString(), url, format, quality, groupId, groupTitle)
+        val job = DownloadJob(UUID.randomUUID().toString(), normalizeYoutubeUrl(url), format, quality, groupId, groupTitle)
         synchronized(lock) { jobs.add(job) }
         touch()
 
@@ -177,10 +177,11 @@ object DownloadQueue {
         start: Int = 1,
         count: Int = PLAYLIST_PAGE_SIZE
     ): Map<String, Any?> = withContext(Dispatchers.IO) {
-        requireValidYoutubeUrl(url)
+        val normalizedUrl = normalizeYoutubeUrl(url)
+        requireValidYoutubeUrl(normalizedUrl)
         prepare(context.applicationContext)
 
-        val request = YoutubeDLRequest(url)
+        val request = YoutubeDLRequest(normalizedUrl)
             .addOption("--flat-playlist")
             .addOption("--dump-json")
             .addOption("--no-warnings")

@@ -55,6 +55,33 @@ class YtdlpUtilsTest {
         assertTrue(isValidYoutubeUrl("https://WWW.YOUTUBE.COM/watch?v=x"))
     }
 
+    // --- normalizeYoutubeUrl ---
+
+    @Test
+    fun `normalizeYoutubeUrl prepends https to a schemeless link`() {
+        assertEquals("https://youtube.com/watch?v=jNQXAC9IVRw", normalizeYoutubeUrl("youtube.com/watch?v=jNQXAC9IVRw"))
+    }
+
+    @Test
+    fun `normalizeYoutubeUrl leaves an already-schemed link unchanged`() {
+        assertEquals("http://youtube.com/watch?v=x", normalizeYoutubeUrl("http://youtube.com/watch?v=x"))
+    }
+
+    @Test
+    fun `normalizeYoutubeUrl trims surrounding whitespace before checking for a scheme`() {
+        assertEquals("https://youtu.be/x", normalizeYoutubeUrl("  youtu.be/x  "))
+    }
+
+    @Test
+    fun `a normalized schemeless link passes isValidYoutubeUrl`() {
+        assertTrue(isValidYoutubeUrl(normalizeYoutubeUrl("youtube.com/watch?v=x")))
+    }
+
+    @Test
+    fun `normalizeYoutubeUrl prepends https to a schemeless www link`() {
+        assertEquals("https://www.youtube.com/watch?v=x", normalizeYoutubeUrl("www.youtube.com/watch?v=x"))
+    }
+
     // --- nonEmptyTrimmedLines ---
 
     @Test
