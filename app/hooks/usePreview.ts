@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { downloader } from "../downloader";
 import type { VideoInfo } from "../downloader/types";
-import { PLAYLIST_URL_PATTERN } from "../lib/format";
+import { parseUrlLines, PLAYLIST_URL_PATTERN } from "../lib/format";
 
 // Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
 const PREVIEW_DEBOUNCE_MS = 600;
 
 /**
  * Debounces `url` into a video preview fetch (title/duration/thumbnail), skipping playlist links
- * since those are resolved through the playlist picker instead.
+ * (resolved through the playlist picker instead) and multi-line batch-queue input (no single video
+ * to preview).
  */
 export function usePreview(url: string) {
   const [preview, setPreview] = useState<{ url: string; info: VideoInfo } | null>(null);
@@ -19,7 +20,8 @@ export function usePreview(url: string) {
 
   useEffect(() => {
     if (!downloader.getVideoInfo) return;
-    const trimmed = url.trim();
+    const lines = parseUrlLines(url);
+    const trimmed = lines.length === 1 ? lines[0] : "";
     if (!trimmed || PLAYLIST_URL_PATTERN.test(trimmed)) {
       setPreview(null);
       setIsPreviewLoading(false);

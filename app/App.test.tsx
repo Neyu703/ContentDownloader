@@ -380,6 +380,66 @@ describe("handleConvert — single video", () => {
   });
 });
 
+describe("handleConvert — batch queue (multi-line input)", () => {
+  it("submits one job per line and clears the input", async () => {
+    await render(<App />);
+    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    await fireEvent.changeText(input, "https://youtu.be/a\nhttps://youtu.be/b");
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
+    expect(mockDownloader.enqueue).toHaveBeenNthCalledWith(1, expect.objectContaining({ url: "https://youtu.be/a" }));
+    expect(mockDownloader.enqueue).toHaveBeenNthCalledWith(2, expect.objectContaining({ url: "https://youtu.be/b" }));
+    expect(input.props.value).toBe("");
+  });
+
+  it("ignores blank lines within the pasted block", async () => {
+    await render(<App />);
+    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    await fireEvent.changeText(input, "https://youtu.be/a\n\n  \nhttps://youtu.be/b");
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
+  });
+
+  it("skips a playlist line, submits the video lines, and shows a singular skip message", async () => {
+    await render(<App />);
+    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    await fireEvent.changeText(input, "https://youtu.be/a\nhttps://youtube.com/playlist?list=PL1\nhttps://youtu.be/b");
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
+    expect(mockDownloader.enqueue).toHaveBeenCalledWith(expect.objectContaining({ url: "https://youtu.be/a" }));
+    expect(mockDownloader.enqueue).toHaveBeenCalledWith(expect.objectContaining({ url: "https://youtu.be/b" }));
+    expect(mockDownloader.getPlaylistInfo).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByText("1 Playlist-Link übersprungen — bitte einzeln einfügen.")).toBeTruthy()
+    );
+  });
+
+  it("uses the plural skip message for more than one skipped playlist line", async () => {
+    await render(<App />);
+    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    await fireEvent.changeText(
+      input,
+      "https://youtube.com/playlist?list=PL1\nhttps://youtu.be/a\nhttps://youtube.com/playlist?list=PL2"
+    );
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() =>
+      expect(screen.getByText("2 Playlist-Links übersprungen — bitte einzeln einfügen.")).toBeTruthy()
+    );
+  });
+
+  it("shows an error and enqueues nothing when the batch is only playlist links", async () => {
+    await render(<App />);
+    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    await fireEvent.changeText(
+      input,
+      "https://youtube.com/playlist?list=PL1\nhttps://youtube.com/playlist?list=PL2"
+    );
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() => expect(screen.getByText("Keine gültigen Links gefunden.")).toBeTruthy());
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleConvert — playlist", () => {
   it("loads playlist info and opens the picker", async () => {
     const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo());

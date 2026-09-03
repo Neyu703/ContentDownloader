@@ -1,6 +1,7 @@
 export const formStyles = {
   urlRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
     gap: 8,
     marginBottom: 10,
   },
@@ -13,11 +14,15 @@ export const formStyles = {
     borderRadius: 8,
     padding: 12,
     fontSize: 15,
+    minHeight: 46,
+    maxHeight: 140,
+    textAlignVertical: "top",
   },
   pasteButton: {
     backgroundColor: "#3a3a3a",
     borderRadius: 8,
     width: 46,
+    height: 46,
     alignItems: "center",
     justifyContent: "center",
   },
