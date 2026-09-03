@@ -3,10 +3,12 @@ import { Platform } from "react-native";
 export const jobCardStyles = {
   jobList: {
     marginTop: 10,
-    flex: 1,
-    // Lets the ScrollView shrink below its content's natural height instead of forcing the card
-    // to overflow — a standard flexbox gotcha for scroll containers (flex:1 alone isn't enough).
-    minHeight: 0,
+    // web-only: flex:1 + minHeight:0 lets the ScrollView shrink to the remaining space within
+    // card's maxHeight instead of growing to its full content height. NOT on native — a flex:1
+    // child of a content-sized (maxHeight-only) parent collapses on React Native's real Yoga
+    // engine (confirmed on-device 2026-08-20, see layout.ts's twoColumnRow for the full story).
+    flex: Platform.select({ web: 1, default: undefined }),
+    minHeight: Platform.select({ web: 0, default: undefined }),
   },
   jobCard: {
     backgroundColor: "#151515",

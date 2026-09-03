@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const layoutStyles = {
   page: {
     flex: 1,
@@ -15,9 +17,10 @@ export const layoutStyles = {
     borderWidth: 1,
     borderColor: "#2c2c2c",
     padding: 28,
-    // Clips content past maxHeight so the job list's own ScrollView (not this card) is the one
-    // scrollable region — without this, cards just overflow the rounded border with no scrollbar.
-    overflow: "hidden",
+    // web-only: clips content past maxHeight so the job list's own ScrollView (not this card) is
+    // the one scrollable region. NOT on native — jobList isn't flex:1 there (see its own comment),
+    // so clipping here would just hide overflowing content with nothing able to scroll to it.
+    overflow: Platform.select({ web: "hidden" as const, default: "visible" as const }),
   },
   cardWide: {
     maxWidth: 920,
@@ -25,11 +28,14 @@ export const layoutStyles = {
   twoColumnRow: {
     flexDirection: "row",
     gap: 24,
-    // flex + minHeight: 0 so this row can actually be clamped by card's maxHeight instead of
-    // growing to its content's full height — every flex ancestor of a scrollable region needs
-    // both, not just the ScrollView itself (see jobCard.ts's jobList for the same reasoning).
-    flex: 1,
-    minHeight: 0,
+    // web-only: lets this row be clamped by card's maxHeight instead of growing to its content's
+    // full height, so the job list's ScrollView further down can actually become scrollable.
+    // NOT on native — React Native's real Yoga engine (unlike RN Web's more forgiving flexbox)
+    // collapses a flex:1 child of a content-sized (maxHeight-only, non-stretched) parent to
+    // near-zero height with overlapping children (confirmed on-device 2026-08-20, the exact
+    // reason flex:1 was removed from here in the first place — do not re-add it unconditionally).
+    flex: Platform.select({ web: 1, default: undefined }),
+    minHeight: Platform.select({ web: 0, default: undefined }),
   },
   twoColumnLeft: {
     flex: 1,
@@ -37,7 +43,7 @@ export const layoutStyles = {
   twoColumnRight: {
     flex: 1,
     minWidth: 0,
-    minHeight: 0,
+    minHeight: Platform.select({ web: 0, default: undefined }),
   },
   title: {
     fontSize: 26,
