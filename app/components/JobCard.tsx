@@ -1,11 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Animated, Easing, Image, Pressable, Text, View } from "react-native";
 import { PHASE_LABELS, type JobState } from "../downloader/types";
-import { estimateAudioSizeMB, formatDuration, formatElapsed, formatMB, formatSecondsShort, isFinishedPhase } from "../lib/format";
+import {
+  estimateAudioSizeMB,
+  formatDuration,
+  formatElapsed,
+  formatMB,
+  formatSecondsShort,
+  hasPositiveDuration,
+  isFinishedPhase,
+} from "../lib/format";
 import { styles } from "../styles";
 
 // No fresh line from yt-dlp for this long: the job is still alive, YouTube is just slow to answer.
 const STALL_HINT_MS = 20_000;
+// Progress bar fallback while yt-dlp hasn't reported a real percentage yet.
+const FALLBACK_PROGRESS_MERGING = 90;
+const FALLBACK_PROGRESS_ACTIVE = 10;
 
 export function JobCard({
   job,
@@ -31,12 +42,15 @@ export function JobCard({
   const detailsAnim = useRef(new Animated.Value(1)).current;
   const isFinished = isFinishedPhase(job.phase);
   const isStalled = !isFinished && now - job.updatedAt > STALL_HINT_MS;
-  const progressPercent = job.progress ?? (job.phase === "converting" || job.phase === "merging" ? 90 : 10);
+  const progressPercent =
+    job.progress ??
+    (job.phase === "converting" || job.phase === "merging" ? FALLBACK_PROGRESS_MERGING : FALLBACK_PROGRESS_ACTIVE);
   const estimatedFinalMB =
-    job.format === "audio" && job.duration != null && job.duration > 0
+    job.format === "audio" && hasPositiveDuration(job.duration)
       ? estimateAudioSizeMB(job.duration, parseInt(job.quality, 10))
       : null;
   const etaLabel = job.etaSeconds != null && job.etaSeconds > 0 ? formatSecondsShort(job.etaSeconds) : null;
+  const extLabel = (job.ext ?? "").toUpperCase();
 
   useEffect(() => {
     Animated.timing(detailsAnim, {
@@ -89,7 +103,7 @@ export function JobCard({
           <Text style={styles.jobTitle} numberOfLines={1}>
             {job.title ?? job.url}
           </Text>
-          {job.duration != null && job.duration > 0 && (
+          {hasPositiveDuration(job.duration) && (
             <Text style={styles.jobDuration}>{formatDuration(job.duration)}</Text>
           )}
         </View>
@@ -198,7 +212,7 @@ export function JobCard({
                   ? "Speichert…"
                   : saveState === "saved"
                     ? "In Downloads gespeichert ✓"
-                    : `${(job.ext ?? "").toUpperCase()} speichern`}
+                    : `${extLabel} speichern`}
               </Text>
             </Pressable>
             <Pressable style={styles.secondaryButton} onPress={onShare} disabled={isSharing}>
@@ -209,7 +223,7 @@ export function JobCard({
         {job.phase === "done" && !onSave && (
           <Pressable style={[styles.downloadButton, isSharing && styles.buttonDisabled]} onPress={onShare} disabled={isSharing}>
             <Text style={styles.downloadButtonText}>
-              {isSharing ? "Lädt herunter…" : `${(job.ext ?? "").toUpperCase()} herunterladen`}
+              {isSharing ? "Lädt herunter…" : `${extLabel} herunterladen`}
             </Text>
           </Pressable>
         )}

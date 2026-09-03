@@ -1,6 +1,7 @@
 import { AppState } from "react-native";
 import Ytdlp, { type NativeJob, type NativeState } from "../modules/ytdlp";
 import type { Downloader, DownloadRequest, JobState, SetupState } from "./types";
+import { mimeTypeForExt, toFileUri } from "../lib/format";
 
 function toJobState(job: NativeJob): JobState {
   return {
@@ -101,7 +102,7 @@ export const downloader: Downloader = {
 
   async getDebugLogFileUri() {
     const path = await Ytdlp.getDebugLogFile();
-    return path.startsWith("file://") ? path : `file://${path}`;
+    return toFileUri(path);
   },
 
   async saveToDownloads(job: JobState) {
@@ -110,7 +111,6 @@ export const downloader: Downloader = {
     // instead of re-deriving a filename here. split() on a non-empty string (guaranteed by the
     // guard above) always yields at least one element, so pop() can never be undefined.
     const filename = job.result.split(/[\\/]/).pop()!;
-    const mimeType = job.ext === "mp4" ? "video/mp4" : "audio/mpeg";
-    await Ytdlp.saveToDownloads(job.result, filename, mimeType);
+    await Ytdlp.saveToDownloads(job.result, filename, mimeTypeForExt(job.ext));
   },
 };

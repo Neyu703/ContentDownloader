@@ -11,11 +11,15 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
 
-private const val MAX_LINES = 500
-
 @RunWith(RobolectricTestRunner::class)
 class DebugLogTest {
     private lateinit var context: Context
+    // Reads DebugLog.kt's private top-level MAX_LINES const via reflection so this test can never
+    // silently drift from the real ring-buffer size if it's ever tuned.
+    private val maxLines = Class.forName("expo.modules.ytdlp.DebugLogKt")
+        .getDeclaredField("MAX_LINES")
+        .apply { isAccessible = true }
+        .getInt(null)
 
     @Before
     fun setUp() {
@@ -52,13 +56,13 @@ class DebugLogTest {
 
     @Test
     fun `add evicts the oldest line once the ring buffer exceeds MAX_LINES`() {
-        repeat(MAX_LINES + 1) { DebugLog.add("line-$it") }
+        repeat(maxLines + 1) { DebugLog.add("line-$it") }
 
         val lines = DebugLog.snapshot().split("\n")
 
-        assertEquals(MAX_LINES, lines.size)
+        assertEquals(maxLines, lines.size)
         assertTrue(lines.first().endsWith("] line-1"))
-        assertTrue(lines.last().endsWith("] line-$MAX_LINES"))
+        assertTrue(lines.last().endsWith("] line-$maxLines"))
     }
 
     @Test

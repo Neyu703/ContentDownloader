@@ -19,6 +19,7 @@ import {
 fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const DOWNLOAD_ID_PATTERN = /^[0-9a-f-]{36}$/i;
 
 export const app = express();
 app.use(
@@ -143,7 +144,7 @@ app.get("/api/job/:jobId", (req, res) => {
 
 app.get("/api/download/:id", (req, res) => {
   const id = req.params.id;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+  if (!DOWNLOAD_ID_PATTERN.test(id)) {
     res.status(400).json({ error: "Ungültige ID." });
     return;
   }

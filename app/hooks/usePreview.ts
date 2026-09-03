@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { downloader } from "../downloader";
 import type { VideoInfo } from "../downloader/types";
+import { PLAYLIST_URL_PATTERN } from "../lib/format";
 
 // Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
 const PREVIEW_DEBOUNCE_MS = 600;
-
-// A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
-// a single video that happens to be playing within one.
-const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
 /**
  * Debounces `url` into a video preview fetch (title/duration/thumbnail), skipping playlist links

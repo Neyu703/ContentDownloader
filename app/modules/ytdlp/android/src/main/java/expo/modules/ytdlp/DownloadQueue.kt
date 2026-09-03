@@ -31,7 +31,7 @@ private const val MAX_PARALLEL = 2
 
 private const val OUTPUT_DIR_NAME = "ytdlp"
 
-/** Download attempts per job: the original try plus this many retries. Mirrors MAX_ATTEMPTS in server/src/youtube.ts. */
+/** Total download attempts per job (including the first try) before a transient failure gives up. Mirrors MAX_ATTEMPTS in server/src/youtube.ts. */
 private const val MAX_ATTEMPTS = 3
 private const val RETRY_DELAY_MS = 2000L
 
@@ -156,6 +156,12 @@ object DownloadQueue {
         return job.id
     }
 
+    private fun requireValidYoutubeUrl(url: String) {
+        if (!isValidYoutubeUrl(url)) {
+            throw IllegalArgumentException("Ungültiger Link – nur YouTube wird unterstützt.")
+        }
+    }
+
     /**
      * Lists one page of a playlist's entries (1-indexed, inclusive range), without downloading
      * anything. Mirrors getPlaylistInfo() in server/src/youtube.ts (same --flat-playlist
@@ -168,9 +174,7 @@ object DownloadQueue {
         start: Int = 1,
         count: Int = PLAYLIST_PAGE_SIZE
     ): Map<String, Any?> = withContext(Dispatchers.IO) {
-        if (!isValidYoutubeUrl(url)) {
-            throw IllegalArgumentException("Ungültiger Link – nur YouTube wird unterstützt.")
-        }
+        requireValidYoutubeUrl(url)
         prepare(context.applicationContext)
 
         val request = YoutubeDLRequest(url)
@@ -224,9 +228,7 @@ object DownloadQueue {
     internal suspend fun runJob(context: Context, job: DownloadJob) {
         if (job.phase == JobPhase.CANCELLED) return
         try {
-            if (!isValidYoutubeUrl(job.url)) {
-                throw IllegalArgumentException("Ungültiger Link – nur YouTube wird unterstützt.")
-            }
+            requireValidYoutubeUrl(job.url)
             prepare(context)
             if (job.phase == JobPhase.CANCELLED) return
 
@@ -308,8 +310,7 @@ object DownloadQueue {
     }
 
     /** The known-permanent sign-in gate is never worth retrying; every other failure is treated as transient. */
-    internal fun isRetryableError(error: Throwable): Boolean =
-        !SIGN_IN_GATE_PATTERN.containsMatchIn(describeErrorRaw(error))
+    internal fun isRetryableError(error: Throwable): Boolean = !isSignInGateError(describeErrorRaw(error))
 
     /**
      * The --print option implies --simulate, so this only resolves the name. Much cheaper than
@@ -412,12 +413,14 @@ object DownloadQueue {
      */
     internal fun describeError(error: Throwable): String {
         val raw = describeErrorRaw(error)
-        return if (SIGN_IN_GATE_PATTERN.containsMatchIn(raw)) {
+        return if (isSignInGateError(raw)) {
             "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
         } else {
             raw
         }
     }
+
+    private fun isSignInGateError(message: String): Boolean = SIGN_IN_GATE_PATTERN.containsMatchIn(message)
 
     /** yt-dlp errors carry the whole stderr; the last real line is the part a user can act on. */
     internal fun describeErrorRaw(error: Throwable): String {

@@ -13,7 +13,7 @@ export interface PlaylistPickerState {
   noMorePages: boolean;
 }
 
-type SubmitFn = (
+export type SubmitFn = (
   targetUrl: string,
   targetFormat: MediaFormat,
   targetQuality: string,
