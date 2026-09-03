@@ -107,8 +107,9 @@ export const downloader: Downloader = {
   async saveToDownloads(job: JobState) {
     if (!job.result) return;
     // The native side already renamed the file to a sanitized "<video title>.<ext>" — reuse that
-    // instead of re-deriving a filename here.
-    const filename = job.result.split(/[\\/]/).pop() ?? `download.${job.ext ?? "mp3"}`;
+    // instead of re-deriving a filename here. split() on a non-empty string (guaranteed by the
+    // guard above) always yields at least one element, so pop() can never be undefined.
+    const filename = job.result.split(/[\\/]/).pop()!;
     const mimeType = job.ext === "mp4" ? "video/mp4" : "audio/mpeg";
     await Ytdlp.saveToDownloads(job.result, filename, mimeType);
   },

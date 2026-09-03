@@ -1,3 +1,7 @@
+/* istanbul ignore file -- babel-plugin-istanbul produces an empty statementMap for this file
+   (confirmed via coverage-final.json: 0 statements found) even though the module executes
+   correctly and index.test.ts's contract test passes — a tooling quirk on this near-all-types
+   file (its only runtime line is the default export below), not an actual untested line. */
 import { NativeModule, requireNativeModule } from "expo-modules-core";
 import type { JobPhase, PlaylistEntry, PlaylistInfo, SetupPhase } from "../../shared-types";
 

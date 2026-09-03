@@ -1,0 +1,57 @@
+import type { JobPhase, MediaFormat, PlaylistInfo } from "../downloader/types";
+
+export function formatMB(mb: number): string {
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
+}
+
+// CBR MP3 at a fixed bitrate has a near-exact size, unlike video (VBR streams, size only known once downloaded).
+export function estimateAudioSizeMB(durationSeconds: number, bitrateKbps: number): number {
+  return (durationSeconds * bitrateKbps * 1000) / 8 / (1024 * 1024);
+}
+
+export function formatSecondsShort(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")} min`;
+}
+
+export function formatDuration(seconds: number): string {
+  const totalSeconds = Math.round(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+export function formatElapsed(ms: number): string {
+  return formatSecondsShort(Math.floor(ms / 1000));
+}
+
+export function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "").trim() || "download";
+}
+
+export function isFinishedPhase(phase: JobPhase): boolean {
+  return phase === "done" || phase === "error" || phase === "cancelled";
+}
+
+export function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
+/** Label for the playlist picker's confirm button — adapts to format, count, and singular/plural. */
+export function playlistConfirmLabel(format: MediaFormat, count: number): string {
+  if (count === 0) return "Nichts ausgewählt";
+  const noun = format === "audio" ? pluralize(count, "Audio", "Audios") : pluralize(count, "Video", "Videos");
+  return `${count} ${noun} herunterladen`;
+}
+
+/** Opaque client-side grouping key — never sent anywhere, just used to cluster job cards in the UI. */
+export function generateGroupId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function isAllPlaylistEntriesSelected(picker: { info: PlaylistInfo; selected: Set<string> }): boolean {
+  return picker.selected.size === picker.info.entries.length;
+}
