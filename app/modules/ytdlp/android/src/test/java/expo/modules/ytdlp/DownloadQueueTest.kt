@@ -487,6 +487,72 @@ class DownloadQueueTest {
         assertEquals("boom", job.error)
     }
 
+    // --- runJob() retry ---
+
+    @Test
+    fun `runJob retries a transient download failure once and succeeds on the second attempt`() = runTest {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title")
+        var callCount = 0
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
+            callCount++
+            if (callCount == 1) {
+                throw RuntimeException("HTTP Error 403: Forbidden")
+            }
+            val request = firstArg<YoutubeDLRequest>()
+            File(request.getOption("-o")!!.replace("%(ext)s", "mp3")).apply { writeText("audio-bytes") }
+            response("")
+        }
+
+        DownloadQueue.runJob(context, job)
+
+        assertEquals(JobPhase.DONE, job.phase)
+        assertEquals(2, callCount)
+    }
+
+    @Test
+    fun `runJob exhausts all attempts on repeated transient failures and marks the job ERROR`() = runTest {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title")
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } throws RuntimeException("HTTP Error 403: Forbidden")
+
+        DownloadQueue.runJob(context, job)
+
+        assertEquals(JobPhase.ERROR, job.phase)
+        assertEquals("HTTP Error 403: Forbidden", job.error)
+        verify(exactly = 3) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
+    }
+
+    @Test
+    fun `runJob does not retry the known-permanent sign-in gate failure`() = runTest {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title")
+        every {
+            engine.execute(any(), any(), any(), isNull(inverse = true))
+        } throws RuntimeException("ERROR: Sign in to confirm you're not a bot")
+
+        DownloadQueue.runJob(context, job)
+
+        assertEquals(JobPhase.ERROR, job.phase)
+        assertEquals(
+            "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden.",
+            job.error
+        )
+        verify(exactly = 1) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
+    }
+
+    // --- isRetryableError() ---
+
+    @Test
+    fun `isRetryableError is false for the known-permanent sign-in gate`() {
+        assertFalse(DownloadQueue.isRetryableError(RuntimeException("ERROR: Sign in to confirm you're not a bot")))
+    }
+
+    @Test
+    fun `isRetryableError is true for any other error`() {
+        assertTrue(DownloadQueue.isRetryableError(RuntimeException("HTTP Error 403: Forbidden")))
+    }
+
     // --- fetchTitle() ---
 
     @Test

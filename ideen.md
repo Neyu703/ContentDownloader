@@ -21,7 +21,7 @@ nach Aufwand sortiert, klein → groß.
   Uploader, wird aber aktuell nur intern fürs Logging genutzt. Anzeige einer Karte
   (Thumbnail + Titel + Dauer) direkt nach Einfügen des Links, bevor der Download startet, verhindert
   Fehlklicks auf falsche Videos. **Aufwand: klein** (Daten sind schon da).
-- [ ] **[1-2] Automatischer Retry bei transienten Fehlern** — z.B. HTTP-403/PO-Token-Fehler (im Code
+- [x] **[1-2] Automatischer Retry bei transienten Fehlern** — z.B. HTTP-403/PO-Token-Fehler (im Code
   bereits als bekanntes Risiko dokumentiert, siehe `checkEnvironment()`), automatisch 1–2×
   erneut versuchen, bevor der Job als "Fehlgeschlagen" markiert wird. **Aufwand: klein**.
 - [ ] **[1-3] Mehrere Links gleichzeitig einfügen (Batch-Queue)** — Textarea statt Single-Line-Input, ein

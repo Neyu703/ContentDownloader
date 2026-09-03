@@ -7,6 +7,7 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,10 @@ private const val TAG = "YtdlpQueue"
 private const val MAX_PARALLEL = 2
 
 private const val OUTPUT_DIR_NAME = "ytdlp"
+
+/** Download attempts per job: the original try plus this many retries. Mirrors MAX_ATTEMPTS in server/src/youtube.ts. */
+private const val MAX_ATTEMPTS = 3
+private const val RETRY_DELAY_MS = 2000L
 
 /** How many playlist entries getPlaylistInfo() lists per call — mirrors PLAYLIST_PAGE_SIZE in server/src/youtube.ts. */
 private const val PLAYLIST_PAGE_SIZE = 50
@@ -235,7 +240,7 @@ object DownloadQueue {
             val outputDir = File(context.cacheDir, OUTPUT_DIR_NAME).apply { mkdirs() }
             advance(job, JobPhase.DOWNLOADING)
 
-            downloadAndFinalize(job, outputDir, ext)
+            downloadWithRetry(job, outputDir, ext)
             advance(job, JobPhase.DONE)
         } catch (cancelled: YoutubeDL.CanceledException) {
             advance(job, JobPhase.CANCELLED)
@@ -275,6 +280,36 @@ object DownloadQueue {
         job.progress = 100.0
         job.etaSeconds = 0
     }
+
+    /**
+     * Runs [downloadAndFinalize], retrying up to MAX_ATTEMPTS times on a transient failure (e.g.
+     * HTTP 403 / PO-token issues) with a fixed delay in between. Mirrors downloadWithRetry() in
+     * server/src/youtube.ts. Cancellation always propagates immediately, never retried.
+     */
+    private suspend fun downloadWithRetry(job: DownloadJob, outputDir: File, ext: String) {
+        for (attempt in 1..MAX_ATTEMPTS) {
+            if (attempt > 1) {
+                job.lastLine = "Erneuter Versuch ($attempt/$MAX_ATTEMPTS)…"
+                touch()
+            }
+            try {
+                downloadAndFinalize(job, outputDir, ext)
+                return
+            } catch (cancelled: YoutubeDL.CanceledException) {
+                throw cancelled
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                if (attempt >= MAX_ATTEMPTS || !isRetryableError(error)) throw error
+                DebugLog.add("job ${job.id} download attempt $attempt/$MAX_ATTEMPTS failed, retrying: ${describeErrorRaw(error)}")
+                delay(RETRY_DELAY_MS)
+            }
+        }
+    }
+
+    /** The known-permanent sign-in gate is never worth retrying; every other failure is treated as transient. */
+    internal fun isRetryableError(error: Throwable): Boolean =
+        !SIGN_IN_GATE_PATTERN.containsMatchIn(describeErrorRaw(error))
 
     /**
      * The --print option implies --simulate, so this only resolves the name. Much cheaper than
