@@ -3,7 +3,7 @@ import cors from "cors";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { isValidYoutubeUrl } from "./validate.js";
+import { isValidYoutubeUrl, normalizeYoutubeUrl } from "./validate.js";
 import { userFacingErrorMessage } from "./utils.js";
 import {
   downloadMedia,
@@ -36,11 +36,12 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim() || "audio";
 }
 
-/** Validates `url` and, if invalid, writes the shared 400 response. Returns whether it was valid. */
-function requireYoutubeUrl(url: unknown, res: Response): url is string {
-  if (typeof url === "string" && isValidYoutubeUrl(url)) return true;
+/** Normalizes and validates `url`, writing the shared 400 response if invalid. Returns the normalized URL, or null. */
+function requireYoutubeUrl(url: unknown, res: Response): string | null {
+  const normalized = typeof url === "string" ? normalizeYoutubeUrl(url) : "";
+  if (isValidYoutubeUrl(normalized)) return normalized;
   res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
-  return false;
+  return null;
 }
 
 type JobState = Omit<ProgressUpdate, "stage"> & {
@@ -65,8 +66,8 @@ app.get("/api/ping", (_req, res) => {
 });
 
 app.get("/api/info", async (req, res) => {
-  const url = req.query.url;
-  if (!requireYoutubeUrl(url, res)) return;
+  const url = requireYoutubeUrl(req.query.url, res);
+  if (!url) return;
 
   try {
     const info = await getVideoInfo(url);
@@ -77,8 +78,8 @@ app.get("/api/info", async (req, res) => {
 });
 
 app.get("/api/playlist-info", async (req, res) => {
-  const url = req.query.url;
-  if (!requireYoutubeUrl(url, res)) return;
+  const url = requireYoutubeUrl(req.query.url, res);
+  if (!url) return;
   const start = Number(req.query.start ?? 1);
   if (!Number.isInteger(start) || start < 1) {
     res.status(400).json({ error: "Ungültiger Startindex." });
@@ -94,8 +95,9 @@ app.get("/api/playlist-info", async (req, res) => {
 });
 
 app.post("/api/convert", (req, res) => {
-  const { url, format, quality } = req.body ?? {};
-  if (!requireYoutubeUrl(url, res)) return;
+  const { format, quality } = req.body ?? {};
+  const url = requireYoutubeUrl(req.body?.url, res);
+  if (!url) return;
   if (format !== "audio" && format !== "video") {
     res.status(400).json({ error: "Bitte Audio oder Video auswählen." });
     return;
