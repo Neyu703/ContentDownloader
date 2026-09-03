@@ -96,7 +96,8 @@ function makeChunkHandler(accumulate: (text: string) => void, onLine?: (line: st
     if (!onLine) return;
     lineBuffer += text;
     const lines = lineBuffer.split("\n");
-    lineBuffer = lines.pop() ?? "";
+    // split() on a string always yields at least one element, so pop() can never be undefined here.
+    lineBuffer = lines.pop()!;
     for (const line of lines) onLine(linePrefix + line);
   };
 }
