@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Image,
   SafeAreaView,
@@ -18,46 +18,31 @@ import { downloader } from "./downloader";
 import {
   type JobState,
   type MediaFormat,
-  type PlaylistInfo,
   type PreviewPatch,
   type SetupState,
-  type VideoInfo,
 } from "./downloader/types";
 import { Dropdown } from "./components/Dropdown";
 import { JobCard } from "./components/JobCard";
 import { PlaylistPickerModal } from "./components/PlaylistPickerModal";
+import { usePreview } from "./hooks/usePreview";
+import { usePlaylistPicker } from "./hooks/usePlaylistPicker";
 import {
   formatDuration,
-  generateGroupId,
-  isAllPlaylistEntriesSelected,
   isFinishedPhase,
   sanitizeFilename,
 } from "./lib/format";
 import { styles } from "./styles";
 
-// Waits for typing to pause before asking the server for a preview, so every keystroke doesn't fire a request.
-const PREVIEW_DEBOUNCE_MS = 600;
-
-// Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
-const WIDE_LAYOUT_BREAKPOINT = 700;
-
 // A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
 // a single video that happens to be playing within one.
 const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
+// Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
+const WIDE_LAYOUT_BREAKPOINT = 700;
+
 interface QualityOption {
   value: string;
   label: string;
-}
-
-/** State backing the playlist-selection picker; url is only needed to fetch further pages. */
-interface PlaylistPickerState {
-  url: string;
-  info: PlaylistInfo;
-  selected: Set<string>;
-  isLoadingMore: boolean;
-  /** Set once a page comes back empty — stops further paging even if totalCount is missing/never reached. */
-  noMorePages: boolean;
 }
 
 const FORMAT_OPTIONS: { value: MediaFormat; label: string }[] = [
@@ -106,13 +91,23 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [isSendingLog, setIsSendingLog] = useState(false);
-  const [preview, setPreview] = useState<{ url: string; info: VideoInfo } | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [playlistPicker, setPlaylistPicker] = useState<PlaylistPickerState | null>(null);
-  const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
-  // Tracks the in-flight/last preview fetch so a download that starts before the debounce timer
-  // fires can still patch title/duration/thumbnail onto the job once it resolves.
-  const previewRequestRef = useRef<{ url: string; promise: Promise<VideoInfo | null> } | null>(null);
+  const { preview, isPreviewLoading, getPendingInfo } = usePreview(url);
+  const {
+    playlistPicker,
+    isPlaylistLoading,
+    startPlaylistFetch,
+    togglePlaylistEntry,
+    togglePlaylistSelectAll,
+    loadMorePlaylistEntries,
+    confirmPlaylistDownload,
+    closePlaylistPicker,
+  } = usePlaylistPicker({
+    format,
+    quality,
+    submit,
+    setSubmitError,
+    onUrlConsumed: () => setUrl(""),
+  });
 
   const hasActiveJob = jobs.some((j) => !isFinishedPhase(j.phase));
   const hasFinishedJob = jobs.some((j) => isFinishedPhase(j.phase));
@@ -127,35 +122,6 @@ export default function App() {
       setSetup(nextSetup);
     });
   }, []);
-
-  useEffect(() => {
-    if (!downloader.getVideoInfo) return;
-    const trimmed = url.trim();
-    if (!trimmed || PLAYLIST_URL_PATTERN.test(trimmed)) {
-      setPreview(null);
-      setIsPreviewLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const controller = new AbortController();
-    setIsPreviewLoading(true);
-    const timer = setTimeout(() => {
-      const promise = downloader.getVideoInfo!(trimmed, controller.signal).catch(() => null);
-      previewRequestRef.current = { url: trimmed, promise };
-      promise.then((info) => {
-        if (!cancelled && info) setPreview({ url: trimmed, info });
-      }).finally(() => {
-        if (!cancelled) setIsPreviewLoading(false);
-      });
-    }, PREVIEW_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [url]);
 
   function handleFormatChange(next: MediaFormat) {
     setFormat(next);
@@ -199,22 +165,7 @@ export default function App() {
     if (!targetUrl || isSubmitting || isPlaylistLoading) return;
 
     if (PLAYLIST_URL_PATTERN.test(targetUrl)) {
-      setSubmitError(null);
-      setIsPlaylistLoading(true);
-      try {
-        const info = await downloader.getPlaylistInfo(targetUrl, 1);
-        setPlaylistPicker({
-          url: targetUrl,
-          info,
-          selected: new Set(info.entries.map((entry) => entry.id)),
-          isLoadingMore: false,
-          noMorePages: info.entries.length === 0,
-        });
-      } catch (err) {
-        setSubmitError(err instanceof Error ? err.message : "Playlist konnte nicht geladen werden.");
-      } finally {
-        setIsPlaylistLoading(false);
-      }
+      await startPlaylistFetch(targetUrl);
       return;
     }
 
@@ -227,87 +178,8 @@ export default function App() {
     const jobId = await submit(targetUrl, format, quality, immediateInfo);
 
     if (!immediateInfo && jobId && downloader.getVideoInfo && downloader.updateJobPreview) {
-      const pending = previewRequestRef.current;
-      const infoPromise = pending?.url === targetUrl ? pending.promise : downloader.getVideoInfo(targetUrl).catch(() => null);
-      infoPromise.then((info) => {
+      getPendingInfo(targetUrl).then((info) => {
         if (info) downloader.updateJobPreview!(jobId, info);
-      });
-    }
-  }
-
-  // Applies `update` only while the picker is still open — it can fire after the user already
-  // closed it (e.g. a slow loadMorePlaylistEntries() page arriving after Abbrechen).
-  function updatePlaylistPicker(update: (current: PlaylistPickerState) => PlaylistPickerState) {
-    setPlaylistPicker((current) => (current ? update(current) : current));
-  }
-
-  function togglePlaylistEntry(id: string) {
-    updatePlaylistPicker((current) => {
-      const selected = new Set(current.selected);
-      if (selected.has(id)) selected.delete(id);
-      else selected.add(id);
-      return { ...current, selected };
-    });
-  }
-
-  function togglePlaylistSelectAll() {
-    updatePlaylistPicker((current) => {
-      const selected = isAllPlaylistEntriesSelected(current)
-        ? new Set<string>()
-        : new Set(current.info.entries.map((entry) => entry.id));
-      return { ...current, selected };
-    });
-  }
-
-  async function loadMorePlaylistEntries() {
-    if (!playlistPicker || playlistPicker.isLoadingMore || playlistPicker.noMorePages) return;
-    const { url: playlistUrl, info } = playlistPicker;
-    if (info.totalCount != null && info.entries.length >= info.totalCount) return;
-
-    updatePlaylistPicker((current) => ({ ...current, isLoadingMore: true }));
-    try {
-      const nextPage = await downloader.getPlaylistInfo(playlistUrl, info.entries.length + 1);
-      updatePlaylistPicker((current) => {
-        // New entries arrive pre-selected, matching the initial page's default.
-        const selected = new Set(current.selected);
-        for (const entry of nextPage.entries) selected.add(entry.id);
-        return {
-          ...current,
-          info: { ...current.info, entries: [...current.info.entries, ...nextPage.entries] },
-          selected,
-          isLoadingMore: false,
-          // Guards against endlessly re-fetching empty pages if totalCount is ever missing or the
-          // loaded count never quite reaches it (e.g. entries removed from the playlist mid-scroll).
-          noMorePages: nextPage.entries.length === 0,
-        };
-      });
-    } catch {
-      // Silently stop paging on error — the entries already loaded stay usable, and the user can
-      // still confirm with whatever loaded so far.
-      updatePlaylistPicker((current) => ({ ...current, isLoadingMore: false }));
-    }
-  }
-
-  async function confirmPlaylistDownload() {
-    // Defensive only: onConfirm is wired from PlaylistPickerModal, which renders nothing (and thus
-    // never calls onConfirm) while its `picker` prop — this same playlistPicker — is null.
-    /* istanbul ignore next */
-    if (!playlistPicker) return;
-    const { info, selected } = playlistPicker;
-    const entries = info.entries.filter((entry) => selected.has(entry.id));
-    const groupId = generateGroupId();
-    setPlaylistPicker(null);
-    setUrl("");
-
-    // Sequential, not Promise.all: keeps job cards appearing in playlist order and avoids firing a
-    // burst of simultaneous yt-dlp processes for large playlists (no server-side concurrency limit yet).
-    for (const entry of entries) {
-      await submit(entry.url, format, quality, {
-        title: entry.title,
-        duration: entry.duration,
-        thumbnail: entry.thumbnail,
-        groupId,
-        groupTitle: info.title,
       });
     }
   }
@@ -508,7 +380,7 @@ export default function App() {
         onToggleAll={togglePlaylistSelectAll}
         onLoadMore={loadMorePlaylistEntries}
         onConfirm={confirmPlaylistDownload}
-        onCancel={() => setPlaylistPicker(null)}
+        onCancel={closePlaylistPicker}
       />
     </SafeAreaView>
   );
