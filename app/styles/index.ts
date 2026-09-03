@@ -4,6 +4,7 @@ import { formStyles } from "./form";
 import { dropdownStyles } from "./dropdown";
 import { jobCardStyles } from "./jobCard";
 import { playlistStyles } from "./playlist";
+import { changelogStyles } from "./changelog";
 
 export const styles = StyleSheet.create({
   ...layoutStyles,
@@ -11,4 +12,5 @@ export const styles = StyleSheet.create({
   ...dropdownStyles,
   ...jobCardStyles,
   ...playlistStyles,
+  ...changelogStyles,
 });

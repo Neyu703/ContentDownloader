@@ -48,6 +48,7 @@ class DownloadQueueTest {
         (privateField("coroutines").get(DownloadQueue) as MutableMap<*, *>).clear()
         privateField("setupPhase").set(DownloadQueue, SetupPhase.IDLE)
         privateField("setupMessage").set(DownloadQueue, "")
+        privateField("setupMessageParams").set(DownloadQueue, null)
         privateField("ytdlpVersion").set(DownloadQueue, null)
         @Suppress("UNCHECKED_CAST")
         (privateField("_revision").get(DownloadQueue) as MutableStateFlow<Long>).value = 0L
@@ -139,7 +140,8 @@ class DownloadQueueTest {
         verify { ffmpeg.init(any()) }
         assertEquals(SetupPhase.READY, DownloadQueue.setupPhase)
         assertEquals("2024.1.1", DownloadQueue.ytdlpVersion)
-        assertTrue(DownloadQueue.setupMessage.contains("2024.1.1"))
+        assertEquals("setup.ready", DownloadQueue.setupMessage)
+        assertEquals(mapOf("version" to "2024.1.1"), DownloadQueue.setupMessageParams)
     }
 
     @Test
@@ -170,7 +172,8 @@ class DownloadQueueTest {
         DownloadQueue.prepare(context)
 
         assertEquals(SetupPhase.READY, DownloadQueue.setupPhase)
-        assertEquals("yt-dlp ? bereit", DownloadQueue.setupMessage)
+        assertEquals("setup.ready", DownloadQueue.setupMessage)
+        assertEquals(mapOf("version" to "?"), DownloadQueue.setupMessageParams)
     }
 
     @Test
@@ -181,7 +184,8 @@ class DownloadQueueTest {
 
         assertEquals("no native binary", error?.message)
         assertEquals(SetupPhase.FAILED, DownloadQueue.setupPhase)
-        assertEquals("no native binary", DownloadQueue.setupMessage)
+        assertEquals("errors.raw", DownloadQueue.setupMessage)
+        assertEquals(mapOf("raw" to "no native binary"), DownloadQueue.setupMessageParams)
     }
 
     // --- enqueue() ---
@@ -218,7 +222,7 @@ class DownloadQueueTest {
         val error = runCatching { DownloadQueue.getPlaylistInfo(context, "https://vimeo.com/x") }.exceptionOrNull()
 
         assertTrue(error is IllegalArgumentException)
-        assertEquals("Ungültiger Link – nur YouTube wird unterstützt.", error?.message)
+        assertEquals("errors.invalidYoutubeUrl", error?.message)
         verify(exactly = 0) { engine.execute(any(), any(), any(), any()) }
     }
 
@@ -389,7 +393,8 @@ class DownloadQueueTest {
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
-        assertEquals("Ungültiger Link – nur YouTube wird unterstützt.", job.error)
+        assertEquals("errors.raw", job.error)
+        assertEquals(mapOf("raw" to "errors.invalidYoutubeUrl"), job.errorParams)
         verify(exactly = 0) { engine.init(any()) }
     }
 
@@ -467,7 +472,10 @@ class DownloadQueueTest {
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
-        assertEquals("yt-dlp hat keine Datei erzeugt.", job.error)
+        assertEquals("errors.raw", job.error)
+        assertEquals(mapOf("raw" to "errors.noFileProduced"), job.errorParams)
+        // Not the sign-in gate, so this is treated as transient and retried MAX_ATTEMPTS times.
+        verify(exactly = 3) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
     }
 
     @Test
@@ -502,7 +510,8 @@ class DownloadQueueTest {
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
-        assertEquals("boom", job.error)
+        assertEquals("errors.raw", job.error)
+        assertEquals(mapOf("raw" to "boom"), job.errorParams)
     }
 
     // --- runJob() retry ---
@@ -526,6 +535,10 @@ class DownloadQueueTest {
 
         assertEquals(JobPhase.DONE, job.phase)
         assertEquals(2, callCount)
+        // downloadWithRetry() sets these before the retried attempt; nothing here clears them again
+        // since the successful retry attempt never calls onOutput().
+        assertEquals("job.retrying", job.lastLineKey)
+        assertEquals(mapOf("attempt" to 2, "maxAttempts" to 3), job.lastLineParams)
     }
 
     @Test
@@ -537,7 +550,8 @@ class DownloadQueueTest {
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
-        assertEquals("HTTP Error 403: Forbidden", job.error)
+        assertEquals("errors.raw", job.error)
+        assertEquals(mapOf("raw" to "HTTP Error 403: Forbidden"), job.errorParams)
         verify(exactly = 3) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
     }
 
@@ -552,10 +566,8 @@ class DownloadQueueTest {
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
-        assertEquals(
-            "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden.",
-            job.error
-        )
+        assertEquals("errors.signInRequired", job.error)
+        assertNull(job.errorParams)
         verify(exactly = 1) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
     }
 
@@ -773,6 +785,32 @@ class DownloadQueueTest {
     }
 
     @Test
+    fun `onOutput clears a stale lastLineKey and lastLineParams once a fresh non-blank line arrives`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320").apply {
+            lastLineKey = "job.retrying"
+            lastLineParams = mapOf("attempt" to 2, "maxAttempts" to 3)
+        }
+
+        DownloadQueue.onOutput(job, 0f, 0L, "[download] 10%")
+
+        assertNull(job.lastLineKey)
+        assertNull(job.lastLineParams)
+    }
+
+    @Test
+    fun `onOutput leaves lastLineKey and lastLineParams untouched for a blank line`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320").apply {
+            lastLineKey = "job.retrying"
+            lastLineParams = mapOf("attempt" to 2, "maxAttempts" to 3)
+        }
+
+        DownloadQueue.onOutput(job, 0f, 0L, "   ")
+
+        assertEquals("job.retrying", job.lastLineKey)
+        assertEquals(mapOf("attempt" to 2, "maxAttempts" to 3), job.lastLineParams)
+    }
+
+    @Test
     fun `onOutput switches phase to MERGING on a Merger line`() {
         val job = DownloadJob("id-1", "https://youtu.be/x", "video", "720")
 
@@ -802,17 +840,14 @@ class DownloadQueueTest {
     // --- describeError() / describeErrorRaw() ---
 
     @Test
-    fun `describeError replaces the message with a friendly one when the sign-in gate matches`() {
+    fun `describeError returns the sign-in-required key with no params when the sign-in gate matches`() {
         val error = RuntimeException("ERROR: Sign in to confirm you're not a bot")
-        assertEquals(
-            "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden.",
-            DownloadQueue.describeError(error)
-        )
+        assertEquals("errors.signInRequired" to null, DownloadQueue.describeError(error))
     }
 
     @Test
-    fun `describeError passes an unrelated message through unchanged`() {
-        assertEquals("boom", DownloadQueue.describeError(RuntimeException("boom")))
+    fun `describeError wraps an unrelated message as errors raw with the raw text as a param`() {
+        assertEquals("errors.raw" to mapOf("raw" to "boom"), DownloadQueue.describeError(RuntimeException("boom")))
     }
 
     @Test

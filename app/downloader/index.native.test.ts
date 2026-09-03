@@ -32,9 +32,12 @@ function nativeJob(overrides: Partial<NativeJob> = {}): NativeJob {
     progress: null,
     etaSeconds: null,
     lastLine: "",
+    lastLineKey: null,
+    lastLineParams: null,
     filePath: null,
     ext: null,
     error: null,
+    errorParams: null,
     createdAt: 0,
     startedAt: null,
     finishedAt: null,
@@ -56,7 +59,6 @@ function jobState(overrides: Partial<JobState> = {}): JobState {
     lastLine: "",
     result: "/cache/My Video.mp3",
     ext: "mp3",
-    error: null,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -97,7 +99,7 @@ describe("ensureInitialized (via subscribe/enqueue)", () => {
 describe("subscribe", () => {
   it("pushes the current mapped state immediately", async () => {
     mockYtdlp.getState.mockResolvedValueOnce({
-      setup: { phase: "ready", message: "up to date", ytdlpVersion: "1.2.3" },
+      setup: { phase: "ready", message: "up to date", messageParams: null, ytdlpVersion: "1.2.3" },
       jobs: [nativeJob({ id: "a" })],
     });
     const downloader = freshDownloader();
@@ -120,7 +122,6 @@ describe("subscribe", () => {
           lastLine: "",
           result: null,
           ext: null,
-          error: null,
           createdAt: 0,
           updatedAt: 0,
           groupId: null,
@@ -140,7 +141,7 @@ describe("subscribe", () => {
 
     const handler = mockYtdlp.addListener.mock.calls[0][1] as (state: NativeState) => void;
     handler({
-      setup: { phase: "ready", message: "", ytdlpVersion: null },
+      setup: { phase: "ready", message: "", messageParams: null, ytdlpVersion: null },
       jobs: [nativeJob({ id: "b" })],
     });
 
@@ -195,7 +196,7 @@ describe("subscribe", () => {
     const listener = jest.fn();
     const unsubscribe = downloader.subscribe(listener);
     unsubscribe();
-    resolveGetState({ setup: { phase: "ready", message: "", ytdlpVersion: null }, jobs: [] });
+    resolveGetState({ setup: { phase: "ready", message: "", messageParams: null, ytdlpVersion: null }, jobs: [] });
     await flushPromises();
 
     expect(listener).not.toHaveBeenCalled();

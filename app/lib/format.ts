@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { JobPhase, MediaFormat, PlaylistInfo, SetupPhase } from "../downloader/types";
 
 // A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
@@ -65,15 +66,10 @@ export function toFileUri(path: string): string {
   return path.startsWith("file://") ? path : `file://${path}`;
 }
 
-export function pluralize(count: number, singular: string, plural: string): string {
-  return count === 1 ? singular : plural;
-}
-
 /** Label for the playlist picker's confirm button — adapts to format, count, and singular/plural. */
-export function playlistConfirmLabel(format: MediaFormat, count: number): string {
-  if (count === 0) return "Nichts ausgewählt";
-  const noun = format === "audio" ? pluralize(count, "Audio", "Audios") : pluralize(count, "Video", "Videos");
-  return `${count} ${noun} herunterladen`;
+export function playlistConfirmLabel(t: TFunction, format: MediaFormat, count: number): string {
+  if (count === 0) return t("playlist.confirmNone");
+  return t(format === "audio" ? "playlist.confirmAudio" : "playlist.confirmVideo", { count });
 }
 
 /** Opaque client-side grouping key — never sent anywhere, just used to cluster job cards in the UI. */

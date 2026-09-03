@@ -240,8 +240,13 @@ async function downloadWithRetry(
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     onProgress(
       attempt === 1
-        ? { stage: "downloading", message: `„${title}“ wird heruntergeladen…`, progress: 0 }
-        : { stage: "downloading", message: `Erneuter Versuch (${attempt}/${MAX_ATTEMPTS})…`, progress: null }
+        ? { stage: "downloading", messageKey: "job.downloadingTitled", messageParams: { title }, progress: 0 }
+        : {
+            stage: "downloading",
+            messageKey: "job.retrying",
+            messageParams: { attempt, maxAttempts: MAX_ATTEMPTS },
+            progress: null,
+          }
     );
 
     try {
@@ -271,7 +276,7 @@ export async function downloadMedia(
   log(`start url=${url} format=${format} quality=${quality}`);
 
   try {
-    onProgress({ stage: "fetching_info", message: "Lade Video-Informationen…", progress: null });
+    onProgress({ stage: "fetching_info", messageKey: "job.fetchingInfo", progress: null });
     const info = await getVideoInfo(url);
     log(`video info: title="${info.title}" duration=${info.duration}`);
 

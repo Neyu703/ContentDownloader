@@ -15,9 +15,12 @@ function toJobState(job: NativeJob): JobState {
     progress: job.progress,
     etaSeconds: job.etaSeconds,
     lastLine: job.lastLine,
+    lastLineKey: job.lastLineKey ?? undefined,
+    lastLineParams: (job.lastLineParams as Record<string, string | number> | null) ?? undefined,
     result: job.filePath,
     ext: job.ext,
-    error: job.error,
+    errorKey: job.error ?? undefined,
+    errorParams: (job.errorParams as Record<string, string | number> | null) ?? undefined,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     groupId: job.groupId,
@@ -26,7 +29,11 @@ function toJobState(job: NativeJob): JobState {
 }
 
 function toSetupState(state: NativeState["setup"]): SetupState {
-  return { phase: state.phase, message: state.message };
+  return {
+    phase: state.phase,
+    message: state.message,
+    messageParams: (state.messageParams as Record<string, string | number> | null) ?? undefined,
+  };
 }
 
 let initPromise: Promise<void> | null = null;

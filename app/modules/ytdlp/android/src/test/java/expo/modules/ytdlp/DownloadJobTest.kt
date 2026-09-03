@@ -18,9 +18,12 @@ class DownloadJobTest {
         assertNull(job.progress)
         assertNull(job.etaSeconds)
         assertEquals("", job.lastLine)
+        assertNull(job.lastLineKey)
+        assertNull(job.lastLineParams)
         assertNull(job.filePath)
         assertNull(job.ext)
         assertNull(job.error)
+        assertNull(job.errorParams)
         assertNull(job.startedAt)
         assertNull(job.finishedAt)
         assertEquals(job.createdAt, job.updatedAt)
@@ -42,9 +45,12 @@ class DownloadJobTest {
         job.progress = 42.5
         job.etaSeconds = 30L
         job.lastLine = "[download] 42%"
+        job.lastLineKey = "job.retrying"
+        job.lastLineParams = mapOf("attempt" to 2, "maxAttempts" to 3)
         job.filePath = "/cache/x.mp3"
         job.ext = "mp3"
-        job.error = null
+        job.error = "errors.raw"
+        job.errorParams = mapOf("raw" to "boom")
         job.startedAt = 100L
         job.finishedAt = 200L
         job.updatedAt = 150L
@@ -62,9 +68,12 @@ class DownloadJobTest {
         assertEquals(42.5, map["progress"])
         assertEquals(30.0, map["etaSeconds"])
         assertEquals("[download] 42%", map["lastLine"])
+        assertEquals("job.retrying", map["lastLineKey"])
+        assertEquals(mapOf("attempt" to 2, "maxAttempts" to 3), map["lastLineParams"])
         assertEquals("/cache/x.mp3", map["filePath"])
         assertEquals("mp3", map["ext"])
-        assertNull(map["error"])
+        assertEquals("errors.raw", map["error"])
+        assertEquals(mapOf("raw" to "boom"), map["errorParams"])
         assertEquals(job.createdAt.toDouble(), map["createdAt"])
         assertEquals(100.0, map["startedAt"])
         assertEquals(200.0, map["finishedAt"])
@@ -80,6 +89,10 @@ class DownloadJobTest {
         assertNull(map["etaSeconds"])
         assertNull(map["startedAt"])
         assertNull(map["finishedAt"])
+        assertNull(map["lastLineKey"])
+        assertNull(map["lastLineParams"])
+        assertNull(map["error"])
+        assertNull(map["errorParams"])
     }
 
     @Test

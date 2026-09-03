@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isValidYoutubeUrl, normalizeYoutubeUrl } from "./validate.js";
-import { userFacingErrorMessage } from "./utils.js";
+import { userFacingError } from "./utils.js";
 import {
   downloadMedia,
   getVideoInfo,
@@ -40,7 +40,7 @@ function sanitizeFilename(name: string): string {
 function requireYoutubeUrl(url: unknown, res: Response): string | null {
   const normalized = typeof url === "string" ? normalizeYoutubeUrl(url) : "";
   if (isValidYoutubeUrl(normalized)) return normalized;
-  res.status(400).json({ error: "Bitte einen gültigen YouTube-Link angeben." });
+  res.status(400).json({ errorKey: "errors.invalidYoutubeUrl" });
   return null;
 }
 
@@ -49,7 +49,8 @@ type JobState = Omit<ProgressUpdate, "stage"> & {
   resultId?: string;
   title?: string;
   ext?: string;
-  error?: string;
+  errorKey?: string;
+  errorParams?: Record<string, string | number>;
 };
 
 const jobs = new Map<string, JobState>();
@@ -73,7 +74,8 @@ app.get("/api/info", async (req, res) => {
     const info = await getVideoInfo(url);
     res.json(info);
   } catch (err) {
-    res.status(502).json({ error: userFacingErrorMessage(err, "Video-Informationen konnten nicht geladen werden.") });
+    const { key, params } = userFacingError(err);
+    res.status(502).json({ errorKey: key, errorParams: params });
   }
 });
 
@@ -82,7 +84,7 @@ app.get("/api/playlist-info", async (req, res) => {
   if (!url) return;
   const start = Number(req.query.start ?? 1);
   if (!Number.isInteger(start) || start < 1) {
-    res.status(400).json({ error: "Ungültiger Startindex." });
+    res.status(400).json({ errorKey: "errors.invalidStartIndex" });
     return;
   }
 
@@ -90,7 +92,8 @@ app.get("/api/playlist-info", async (req, res) => {
     const info = await getPlaylistInfo(url, start);
     res.json(info);
   } catch (err) {
-    res.status(502).json({ error: userFacingErrorMessage(err, "Playlist konnte nicht geladen werden.") });
+    const { key, params } = userFacingError(err);
+    res.status(502).json({ errorKey: key, errorParams: params });
   }
 });
 
@@ -99,17 +102,17 @@ app.post("/api/convert", (req, res) => {
   const url = requireYoutubeUrl(req.body?.url, res);
   if (!url) return;
   if (format !== "audio" && format !== "video") {
-    res.status(400).json({ error: "Bitte Audio oder Video auswählen." });
+    res.status(400).json({ errorKey: "errors.invalidFormat" });
     return;
   }
   const allowedQualities: readonly string[] = format === "audio" ? AUDIO_QUALITIES : VIDEO_QUALITIES;
   if (typeof quality !== "string" || !allowedQualities.includes(quality)) {
-    res.status(400).json({ error: "Bitte eine gültige Qualität auswählen." });
+    res.status(400).json({ errorKey: "errors.invalidQuality" });
     return;
   }
 
   const jobId = randomUUID();
-  jobs.set(jobId, { stage: "starting", message: "Wird gestartet…", progress: null });
+  jobs.set(jobId, { stage: "starting", messageKey: "job.starting", progress: null });
   res.json({ jobId });
 
   downloadMedia(url, format as MediaFormat, quality, (update) => {
@@ -118,7 +121,7 @@ app.post("/api/convert", (req, res) => {
     .then((result) => {
       finishJob(jobId, {
         stage: "done",
-        message: "Fertig!",
+        messageKey: "job.done",
         progress: 100,
         resultId: result.id,
         title: result.title,
@@ -126,11 +129,13 @@ app.post("/api/convert", (req, res) => {
       });
     })
     .catch((err) => {
+      const { key, params } = userFacingError(err);
       finishJob(jobId, {
         stage: "error",
-        message: "Konvertierung fehlgeschlagen.",
+        messageKey: "job.conversionFailed",
         progress: null,
-        error: userFacingErrorMessage(err),
+        errorKey: key,
+        errorParams: params,
       });
     });
 });
@@ -138,7 +143,7 @@ app.post("/api/convert", (req, res) => {
 app.get("/api/job/:jobId", (req, res) => {
   const job = jobs.get(req.params.jobId);
   if (!job) {
-    res.status(404).json({ error: "Job nicht gefunden." });
+    res.status(404).json({ errorKey: "errors.jobNotFound" });
     return;
   }
   res.json(job);
@@ -147,13 +152,13 @@ app.get("/api/job/:jobId", (req, res) => {
 app.get("/api/download/:id", (req, res) => {
   const id = req.params.id;
   if (!DOWNLOAD_ID_PATTERN.test(id)) {
-    res.status(400).json({ error: "Ungültige ID." });
+    res.status(400).json({ errorKey: "errors.invalidDownloadId" });
     return;
   }
 
   const match = fs.readdirSync(DOWNLOADS_DIR).find((f) => f.startsWith(`${id}.`));
   if (!match) {
-    res.status(404).json({ error: "Datei nicht gefunden." });
+    res.status(404).json({ errorKey: "errors.fileNotFound" });
     return;
   }
   const filePath = path.join(DOWNLOADS_DIR, match);

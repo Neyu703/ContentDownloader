@@ -17,7 +17,7 @@ object MediaStoreSaver {
     fun saveToDownloads(context: Context, sourcePath: String, filename: String, mimeType: String): String {
         val appContext = context.applicationContext
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            throw UnsupportedOperationException("Speichern erfordert Android 10 oder neuer.")
+            throw UnsupportedOperationException("errors.saveRequiresAndroid10")
         }
 
         val resolver = appContext.contentResolver
@@ -27,12 +27,12 @@ object MediaStoreSaver {
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
         val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            ?: throw IllegalStateException("Konnte keinen Downloads-Eintrag anlegen.")
+            ?: throw IllegalStateException("errors.saveInsertFailed")
 
         try {
             resolver.openOutputStream(uri)?.use { output ->
                 File(sourcePath).inputStream().use { input -> input.copyTo(output) }
-            } ?: throw IllegalStateException("Konnte Downloads-Eintrag nicht öffnen.")
+            } ?: throw IllegalStateException("errors.saveOpenFailed")
         } catch (error: Throwable) {
             resolver.delete(uri, null, null)
             throw error

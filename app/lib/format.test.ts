@@ -1,3 +1,4 @@
+import { initI18n } from "../i18n";
 import {
   estimateAudioSizeMB,
   formatDuration,
@@ -8,10 +9,11 @@ import {
   isAllPlaylistEntriesSelected,
   isFinishedPhase,
   playlistConfirmLabel,
-  pluralize,
   sanitizeFilename,
 } from "./format";
 import type { PlaylistInfo } from "../downloader/types";
+
+const t = initI18n("de").getFixedT("de");
 
 describe("formatMB", () => {
   it("shows MB below 1024", () => {
@@ -85,36 +87,25 @@ describe("isFinishedPhase", () => {
   });
 });
 
-describe("pluralize", () => {
-  it("returns the singular for exactly 1", () => {
-    expect(pluralize(1, "Audio", "Audios")).toBe("Audio");
-  });
-
-  it("returns the plural for 0 and for more than 1", () => {
-    expect(pluralize(0, "Audio", "Audios")).toBe("Audios");
-    expect(pluralize(2, "Audio", "Audios")).toBe("Audios");
-  });
-});
-
 describe("playlistConfirmLabel", () => {
   it("says nothing is selected at count 0", () => {
-    expect(playlistConfirmLabel("audio", 0)).toBe("Nichts ausgewählt");
+    expect(playlistConfirmLabel(t, "audio", 0)).toBe("Nichts ausgewählt");
   });
 
   it("uses the singular audio noun at count 1", () => {
-    expect(playlistConfirmLabel("audio", 1)).toBe("1 Audio herunterladen");
+    expect(playlistConfirmLabel(t, "audio", 1)).toBe("1 Audio herunterladen");
   });
 
   it("uses the plural audio noun above 1", () => {
-    expect(playlistConfirmLabel("audio", 3)).toBe("3 Audios herunterladen");
+    expect(playlistConfirmLabel(t, "audio", 3)).toBe("3 Audios herunterladen");
   });
 
   it("uses the singular video noun at count 1", () => {
-    expect(playlistConfirmLabel("video", 1)).toBe("1 Video herunterladen");
+    expect(playlistConfirmLabel(t, "video", 1)).toBe("1 Video herunterladen");
   });
 
   it("uses the plural video noun above 1", () => {
-    expect(playlistConfirmLabel("video", 2)).toBe("2 Videos herunterladen");
+    expect(playlistConfirmLabel(t, "video", 2)).toBe("2 Videos herunterladen");
   });
 });
 

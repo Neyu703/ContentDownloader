@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 import type { Downloader, DownloadRequest, JobPhase, JobState, PlaylistInfo, PreviewPatch, SetupState, VideoInfo } from "./types";
 
 const SERVER_URL = "http://localhost:3001";
@@ -6,7 +7,8 @@ const PING_TIMEOUT_MS = 2000;
 
 interface ServerJob {
   stage: "starting" | "fetching_info" | "downloading" | "converting" | "done" | "error";
-  message: string;
+  messageKey: string;
+  messageParams?: Record<string, string | number>;
   progress: number | null;
   downloadedMB?: number;
   totalMB?: number;
@@ -15,7 +17,8 @@ interface ServerJob {
   resultId?: string;
   title?: string;
   ext?: string;
-  error?: string;
+  errorKey?: string;
+  errorParams?: Record<string, string | number>;
 }
 
 const STAGE_TO_PHASE: Record<ServerJob["stage"], JobPhase> = {
@@ -55,13 +58,24 @@ async function isServerReachable(): Promise<boolean> {
   }
 }
 
-async function parseError(res: Response): Promise<string> {
+interface ParsedError {
+  errorKey: string;
+  errorParams?: Record<string, string | number>;
+}
+
+async function parseErrorKeyParams(res: Response): Promise<ParsedError> {
   try {
     const data = await res.json();
-    return data.error ?? "Unbekannter Fehler.";
+    return typeof data.errorKey === "string" ? { errorKey: data.errorKey, errorParams: data.errorParams } : { errorKey: "errors.unknown" };
   } catch {
-    return "Unbekannter Fehler.";
+    return { errorKey: "errors.unknown" };
   }
+}
+
+/** For one-shot (non-job) failures — resolves straight to translated text since there's no persistent UI element to keep reactive across a later language switch. */
+async function parseError(res: Response): Promise<string> {
+  const { errorKey, errorParams } = await parseErrorKeyParams(res);
+  return i18n.t(errorKey, errorParams);
 }
 
 const READY_SETUP: SetupState = { phase: "ready", message: "" };
@@ -96,7 +110,8 @@ function pollJob(id: string) {
       const res = await fetch(`${SERVER_URL}/api/job/${id}`);
       if (!res.ok) {
         stopPolling(id);
-        patchJob(id, { phase: "error", error: await parseError(res) });
+        const { errorKey, errorParams } = await parseErrorKeyParams(res);
+        patchJob(id, { phase: "error", errorKey, errorParams });
         return;
       }
       const job: ServerJob = await res.json();
@@ -114,7 +129,11 @@ function pollJob(id: string) {
       }
       if (job.stage === "error") {
         stopPolling(id);
-        patchJob(id, { phase: "error", error: job.error ?? "Download fehlgeschlagen." });
+        patchJob(id, {
+          phase: "error",
+          errorKey: job.errorKey ?? "errors.unknown",
+          errorParams: job.errorParams,
+        });
         return;
       }
       patchJob(id, {
@@ -124,11 +143,17 @@ function pollJob(id: string) {
         totalMB: job.totalMB,
         speedMBs: job.speedMBs,
         etaSeconds: job.eta ? parseEtaToSeconds(job.eta) : null,
-        lastLine: job.message,
+        lastLine: "",
+        lastLineKey: job.messageKey,
+        lastLineParams: job.messageParams,
       });
     } catch {
       stopPolling(id);
-      patchJob(id, { phase: "error", error: `Server nicht erreichbar unter ${SERVER_URL}` });
+      patchJob(id, {
+        phase: "error",
+        errorKey: "errors.serverUnreachable",
+        errorParams: { serverUrl: SERVER_URL },
+      });
     }
   }, POLL_INTERVAL_MS);
   pollers.set(id, timer);
@@ -169,7 +194,6 @@ export const downloader: Downloader = {
       thumbnail: request.thumbnail ?? null,
       result: null,
       ext: null,
-      error: null,
       createdAt: now,
       updatedAt: now,
       groupId: request.groupId ?? null,

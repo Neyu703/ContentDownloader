@@ -28,13 +28,14 @@ private const val NOTIFICATION_ID = 4711
 class DownloadServiceTest {
     private lateinit var controller: ServiceController<DownloadService>
     private lateinit var notificationManager: NotificationManager
+    private lateinit var context: android.content.Context
 
     @Before
     fun setUp() {
         resetDownloadQueueState()
         controller = Robolectric.buildService(DownloadService::class.java)
-        notificationManager = ApplicationProvider.getApplicationContext<android.content.Context>()
-            .getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager
+        context = ApplicationProvider.getApplicationContext()
+        notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
     @After
@@ -50,6 +51,8 @@ class DownloadServiceTest {
         setupPhaseField.set(DownloadQueue, SetupPhase.IDLE)
         val setupMessageField = DownloadQueue::class.java.getDeclaredField("setupMessage").apply { isAccessible = true }
         setupMessageField.set(DownloadQueue, "")
+        val setupMessageParamsField = DownloadQueue::class.java.getDeclaredField("setupMessageParams").apply { isAccessible = true }
+        setupMessageParamsField.set(DownloadQueue, null)
         val revisionField = DownloadQueue::class.java.getDeclaredField("_revision").apply { isAccessible = true }
         @Suppress("UNCHECKED_CAST")
         (revisionField.get(DownloadQueue) as MutableStateFlow<Long>).value = 0L
@@ -71,7 +74,7 @@ class DownloadServiceTest {
         controller.create()
 
         val channel = notificationManager.getNotificationChannel("ytdlp_downloads")
-        assertEquals("Downloads", channel?.name)
+        assertEquals(context.getString(R.string.notification_channel_name), channel?.name)
 
         val wakeLockField = DownloadService::class.java.getDeclaredField("wakeLock").apply { isAccessible = true }
         val wakeLock = wakeLockField.get(controller.get()) as PowerManager.WakeLock?
@@ -164,20 +167,31 @@ class DownloadServiceTest {
     // --- buildNotification() content, exercised via the foreground call in onStartCommand ---
 
     @Test
-    fun `notification falls back to the setup message when no job is active`() {
-        // setupPhase PREPARING (not just the message) keeps hasPendingWork() true, so the
-        // service stays in the foreground long enough for the notification to be inspected.
+    fun `notification falls back to the setup phase label when no job is active`() {
+        // setupPhase PREPARING keeps hasPendingWork() true, so the service stays in the
+        // foreground long enough for the notification to be inspected. The title now comes from
+        // setupPhaseLabel() (an Android string resource), not the JS-facing setupMessage key.
         val setupPhaseField = DownloadQueue::class.java.getDeclaredField("setupPhase").apply { isAccessible = true }
         setupPhaseField.set(DownloadQueue, SetupPhase.PREPARING)
-        val setupMessageField = DownloadQueue::class.java.getDeclaredField("setupMessage").apply { isAccessible = true }
-        setupMessageField.set(DownloadQueue, "Bereite yt-dlp vor…")
         controller.create()
 
         controller.get().onStartCommand(null, 0, 1)
 
         val notification = postedNotification()
-        assertEquals("Bereite yt-dlp vor…", notification?.extras?.getCharSequence(Notification.EXTRA_TITLE))
-        assertEquals("Bitte warten", notification?.extras?.getCharSequence(Notification.EXTRA_TEXT))
+        assertEquals(context.getString(R.string.notification_preparing), notification?.extras?.getCharSequence(Notification.EXTRA_TITLE))
+        assertEquals(context.getString(R.string.notification_please_wait), notification?.extras?.getCharSequence(Notification.EXTRA_TEXT))
+    }
+
+    @Test
+    fun `notification uses the updating label when setup phase is UPDATING`() {
+        val setupPhaseField = DownloadQueue::class.java.getDeclaredField("setupPhase").apply { isAccessible = true }
+        setupPhaseField.set(DownloadQueue, SetupPhase.UPDATING)
+        controller.create()
+
+        controller.get().onStartCommand(null, 0, 1)
+
+        val notification = postedNotification()
+        assertEquals(context.getString(R.string.notification_updating), notification?.extras?.getCharSequence(Notification.EXTRA_TITLE))
     }
 
     @Test
@@ -196,7 +210,7 @@ class DownloadServiceTest {
         val notification = postedNotification()
         assertEquals("My Video", notification?.extras?.getCharSequence(Notification.EXTRA_TITLE))
         val text = notification?.extras?.getCharSequence(Notification.EXTRA_TEXT).toString()
-        assertTrue(text.contains("Lädt herunter"))
+        assertTrue(text.contains(context.getString(R.string.phase_downloading)))
         assertTrue(text.contains("42 %"))
         assertTrue(text.contains("1:30 min"))
     }
@@ -228,7 +242,7 @@ class DownloadServiceTest {
         controller.get().onStartCommand(null, 0, 1)
 
         val text = postedNotification()?.extras?.getCharSequence(Notification.EXTRA_TEXT).toString()
-        assertFalse(text.contains("noch"))
+        assertFalse(text.contains(context.getString(R.string.notification_eta_suffix, "").trim()))
     }
 
     @Test
@@ -241,7 +255,7 @@ class DownloadServiceTest {
         controller.get().onStartCommand(null, 0, 1)
 
         val text = postedNotification()?.extras?.getCharSequence(Notification.EXTRA_TEXT).toString()
-        assertTrue(text.contains("+2 in der Warteschlange"))
+        assertTrue(text.contains(context.getString(R.string.notification_queue_suffix, 2)))
     }
 
     @Test
@@ -346,14 +360,30 @@ class DownloadServiceTest {
 
     @Test
     fun `phaseLabel covers every JobPhase, including ones never actually shown as the active job`() {
-        assertEquals("In der Warteschlange", controller.get().phaseLabel(JobPhase.QUEUED))
-        assertEquals("Lädt Video-Informationen", controller.get().phaseLabel(JobPhase.FETCHING_INFO))
-        assertEquals("Lädt herunter", controller.get().phaseLabel(JobPhase.DOWNLOADING))
-        assertEquals("Konvertiert", controller.get().phaseLabel(JobPhase.CONVERTING))
-        assertEquals("Führt Video und Audio zusammen", controller.get().phaseLabel(JobPhase.MERGING))
-        assertEquals("Fertig", controller.get().phaseLabel(JobPhase.DONE))
-        assertEquals("Fehlgeschlagen", controller.get().phaseLabel(JobPhase.ERROR))
-        assertEquals("Abgebrochen", controller.get().phaseLabel(JobPhase.CANCELLED))
+        assertEquals(context.getString(R.string.phase_queued), controller.get().phaseLabel(JobPhase.QUEUED))
+        assertEquals(context.getString(R.string.phase_fetching_info), controller.get().phaseLabel(JobPhase.FETCHING_INFO))
+        assertEquals(context.getString(R.string.phase_downloading), controller.get().phaseLabel(JobPhase.DOWNLOADING))
+        assertEquals(context.getString(R.string.phase_converting), controller.get().phaseLabel(JobPhase.CONVERTING))
+        assertEquals(context.getString(R.string.phase_merging), controller.get().phaseLabel(JobPhase.MERGING))
+        assertEquals(context.getString(R.string.phase_done), controller.get().phaseLabel(JobPhase.DONE))
+        assertEquals(context.getString(R.string.phase_error), controller.get().phaseLabel(JobPhase.ERROR))
+        assertEquals(context.getString(R.string.phase_cancelled), controller.get().phaseLabel(JobPhase.CANCELLED))
+    }
+
+    // --- setupPhaseLabel() ---
+
+    @Test
+    fun `setupPhaseLabel returns the preparing label for every non-UPDATING phase`() {
+        val service = controller.get()
+        assertEquals(context.getString(R.string.notification_preparing), service.setupPhaseLabel(SetupPhase.IDLE))
+        assertEquals(context.getString(R.string.notification_preparing), service.setupPhaseLabel(SetupPhase.PREPARING))
+        assertEquals(context.getString(R.string.notification_preparing), service.setupPhaseLabel(SetupPhase.READY))
+        assertEquals(context.getString(R.string.notification_preparing), service.setupPhaseLabel(SetupPhase.FAILED))
+    }
+
+    @Test
+    fun `setupPhaseLabel returns the updating label for UPDATING`() {
+        assertEquals(context.getString(R.string.notification_updating), controller.get().setupPhaseLabel(SetupPhase.UPDATING))
     }
 
     // --- openAppIntent()'s found-a-launcher-activity branch ---

@@ -2,7 +2,8 @@ import type { MediaFormat } from "./youtube.js";
 
 export interface ProgressUpdate {
   stage: "fetching_info" | "downloading" | "converting";
-  message: string;
+  messageKey: string;
+  messageParams?: Record<string, string | number>;
   progress: number | null;
   downloadedMB?: number;
   totalMB?: number;
@@ -34,7 +35,8 @@ export function parseProgressLine(line: string, format: MediaFormat): ProgressUp
     const downloadedMB = totalMB != null ? (totalMB * pct) / 100 : null;
     return {
       stage: "downloading",
-      message: `Wird heruntergeladen… (${pct.toFixed(1)}%)`,
+      messageKey: "job.downloading",
+      messageParams: { percent: pct.toFixed(1) },
       progress: pct,
       downloadedMB: downloadedMB ?? undefined,
       totalMB: totalMB ?? undefined,
@@ -45,12 +47,12 @@ export function parseProgressLine(line: string, format: MediaFormat): ProgressUp
   if (line.includes("[ExtractAudio]") || line.includes("[ffmpeg]")) {
     return {
       stage: "converting",
-      message: format === "audio" ? "Konvertiere zu MP3…" : "Verarbeite Video…",
+      messageKey: format === "audio" ? "job.convertingAudio" : "job.convertingVideo",
       progress: null,
     };
   }
   if (line.includes("[Merger]")) {
-    return { stage: "converting", message: "Führe Video und Audio zusammen…", progress: null };
+    return { stage: "converting", messageKey: "job.merging", progress: null };
   }
   return null;
 }

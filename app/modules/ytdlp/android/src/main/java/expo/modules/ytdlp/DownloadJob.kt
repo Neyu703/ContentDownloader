@@ -55,14 +55,25 @@ class DownloadJob(
     @Volatile
     var lastLine: String = ""
 
+    /** Translation key for a higher-level status (e.g. a retry notice) that should override [lastLine] while set. */
+    @Volatile
+    var lastLineKey: String? = null
+
+    @Volatile
+    var lastLineParams: Map<String, Any?>? = null
+
     @Volatile
     var filePath: String? = null
 
     @Volatile
     var ext: String? = null
 
+    /** Translation key describing the failure, e.g. "errors.signInRequired" or "errors.raw" (with `raw` in [errorParams]). */
     @Volatile
     var error: String? = null
+
+    @Volatile
+    var errorParams: Map<String, Any?>? = null
 
     val createdAt: Long = System.currentTimeMillis()
 
@@ -89,9 +100,12 @@ class DownloadJob(
         "progress" to progress,
         "etaSeconds" to etaSeconds?.toDouble(),
         "lastLine" to lastLine,
+        "lastLineKey" to lastLineKey,
+        "lastLineParams" to lastLineParams,
         "filePath" to filePath,
         "ext" to ext,
         "error" to error,
+        "errorParams" to errorParams,
         "createdAt" to createdAt.toDouble(),
         "startedAt" to startedAt?.toDouble(),
         "finishedAt" to finishedAt?.toDouble(),

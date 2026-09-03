@@ -1,8 +1,15 @@
 import type { Downloader } from "./types";
-import { freshDownloaderFrom } from "./testUtils";
 
-function freshDownloader() {
-  return freshDownloaderFrom("./index.web");
+// index.web.ts resolves translated text via the shared i18n instance. freshDownloaderFrom()'s
+// jest.isolateModules() gives each downloader its own fresh copy of that instance, so it has to be
+// initialized inside the same isolated registry rather than once at the top of this file.
+function freshDownloader(): Downloader {
+  let downloader!: Downloader;
+  jest.isolateModules(() => {
+    (require("../i18n") as typeof import("../i18n")).initI18n("de");
+    downloader = (require("./index.web") as typeof import("./index.web")).downloader;
+  });
+  return downloader;
 }
 
 function jsonResponse(body: unknown, ok = true) {
@@ -95,7 +102,7 @@ describe("enqueue", () => {
     jest
       .mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
-      .mockResolvedValueOnce(jsonResponse({ error: "Bitte einen gültigen YouTube-Link angeben." }, false));
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.invalidYoutubeUrl" }, false));
     await expect(downloader.enqueue({ url: "u", format: "audio", quality: "320" })).rejects.toThrow(
       "Bitte einen gültigen YouTube-Link angeben."
     );
@@ -171,11 +178,17 @@ describe("pollJob (driven via enqueue + fake timers)", () => {
     const listener = jest.fn();
     downloader.subscribe(listener);
 
-    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: "gone" }, false));
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.raw", errorParams: { raw: "gone" } }, false));
     await jest.advanceTimersByTimeAsync(600);
 
     const [jobsArg] = listener.mock.calls.at(-1)!;
-    expect(jobsArg[0]).toMatchObject({ phase: "error", error: "gone" });
+    expect(jobsArg[0]).toMatchObject({
+      phase: "error",
+      errorKey: "errors.raw",
+      errorParams: { raw: "gone" },
+    });
   });
 
   it("resolves to done when stage is done with resultId/title/ext all present", async () => {
@@ -209,7 +222,28 @@ describe("pollJob (driven via enqueue + fake timers)", () => {
     expect(jobsArg[0].result).toBeNull();
   });
 
-  it("uses the error message when present, falls back when absent", async () => {
+  it("uses the job's own errorKey/errorParams when present", async () => {
+    const downloader = freshDownloader();
+    await enqueueAndGetId(downloader);
+    const listener = jest.fn();
+    downloader.subscribe(listener);
+
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ stage: "error", errorKey: "errors.raw", errorParams: { raw: "boom" } })
+      );
+    await jest.advanceTimersByTimeAsync(600);
+
+    const [jobsArg] = listener.mock.calls.at(-1)!;
+    expect(jobsArg[0]).toMatchObject({
+      phase: "error",
+      errorKey: "errors.raw",
+      errorParams: { raw: "boom" },
+    });
+  });
+
+  it("falls back to errors.unknown when the job stage is error but errorKey is absent", async () => {
     const downloader = freshDownloader();
     await enqueueAndGetId(downloader);
     const listener = jest.fn();
@@ -219,7 +253,7 @@ describe("pollJob (driven via enqueue + fake timers)", () => {
     await jest.advanceTimersByTimeAsync(600);
 
     const [jobsArg] = listener.mock.calls.at(-1)!;
-    expect(jobsArg[0]).toMatchObject({ phase: "error", error: "Download fehlgeschlagen." });
+    expect(jobsArg[0]).toMatchObject({ phase: "error", errorKey: "errors.unknown" });
   });
 
   it("maps an in-progress stage and parses a present eta", async () => {
@@ -260,8 +294,8 @@ describe("pollJob (driven via enqueue + fake timers)", () => {
     await jest.advanceTimersByTimeAsync(600);
 
     const [jobsArg] = listener.mock.calls.at(-1)!;
-    expect(jobsArg[0]).toMatchObject({ phase: "error" });
-    expect(jobsArg[0].error).toContain("nicht erreichbar");
+    expect(jobsArg[0]).toMatchObject({ phase: "error", errorKey: "errors.serverUnreachable" });
+    expect(jobsArg[0].errorParams?.serverUrl).toContain("localhost");
   });
 });
 
@@ -311,7 +345,9 @@ describe("getVideoInfo / getPlaylistInfo", () => {
 
   it("getVideoInfo throws parseError's message on failure", async () => {
     const downloader = freshDownloader();
-    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: "bad url" }, false));
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.raw", errorParams: { raw: "bad url" } }, false));
     await expect(downloader.getVideoInfo!("u")).rejects.toThrow("bad url");
   });
 
@@ -324,7 +360,9 @@ describe("getVideoInfo / getPlaylistInfo", () => {
 
   it("getPlaylistInfo throws parseError's message on failure", async () => {
     const downloader = freshDownloader();
-    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ error: "nope" }, false));
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.raw", errorParams: { raw: "nope" } }, false));
     await expect(downloader.getPlaylistInfo("u", 1)).rejects.toThrow("nope");
   });
 });

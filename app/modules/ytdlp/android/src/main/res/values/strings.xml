@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_name">Downloads</string>
+    <string name="notification_channel_description">Zeigt den Fortschritt laufender Downloads</string>
+    <string name="notification_preparing">Wird vorbereitet…</string>
+    <string name="notification_updating">Suche nach yt-dlp-Update…</string>
+    <string name="notification_please_wait">Bitte warten</string>
+    <string name="notification_cancel_all">Alle abbrechen</string>
+    <string name="notification_queue_suffix">+%1$d in der Warteschlange</string>
+    <string name="notification_eta_suffix">noch %1$s</string>
+    <string name="phase_queued">In der Warteschlange</string>
+    <string name="phase_fetching_info">Lädt Video-Informationen</string>
+    <string name="phase_downloading">Lädt herunter</string>
+    <string name="phase_converting">Konvertiert</string>
+    <string name="phase_merging">Führt Video und Audio zusammen</string>
+    <string name="phase_done">Fertig</string>
+    <string name="phase_error">Fehlgeschlagen</string>
+    <string name="phase_cancelled">Abgebrochen</string>
+</resources>

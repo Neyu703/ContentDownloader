@@ -331,7 +331,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     expect(updates[0]).toMatchObject({ stage: "fetching_info" });
     expect(updates[1]).toMatchObject({ stage: "downloading", progress: 0 });
     expect(updates[2]).toMatchObject({ stage: "downloading", progress: 50 });
-    expect(updates[3]).toMatchObject({ stage: "converting", message: "Konvertiere zu MP3…" });
+    expect(updates[3]).toMatchObject({ stage: "converting", messageKey: "job.convertingAudio" });
 
     const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
     expect(downloadArgs).toEqual(
@@ -357,8 +357,8 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     expect(result.ext).toBe("mp4");
 
     const updates = progressUpdates(onProgress.mock.calls as ProgressUpdate[][]);
-    expect(updates.at(-2)).toMatchObject({ stage: "converting", message: "Verarbeite Video…" });
-    expect(updates.at(-1)).toMatchObject({ stage: "converting", message: "Führe Video und Audio zusammen…" });
+    expect(updates.at(-2)).toMatchObject({ stage: "converting", messageKey: "job.convertingVideo" });
+    expect(updates.at(-1)).toMatchObject({ stage: "converting", messageKey: "job.merging" });
 
     const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
     expect(downloadArgs).toEqual(expect.arrayContaining(["-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best[height<=720]"]));
@@ -519,7 +519,12 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
 
         expect(result.title).toBe("My Song");
         expect(onProgress).toHaveBeenCalledWith(
-          expect.objectContaining({ stage: "downloading", message: "Erneuter Versuch (2/3)…", progress: null })
+          expect.objectContaining({
+            stage: "downloading",
+            messageKey: "job.retrying",
+            messageParams: { attempt: 2, maxAttempts: 3 },
+            progress: null,
+          })
         );
         expect(spawn).toHaveBeenCalledTimes(3);
       } finally {

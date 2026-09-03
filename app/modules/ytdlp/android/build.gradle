@@ -25,6 +25,10 @@ android {
   }
   testOptions {
     unitTests.returnDefaultValues = false
+    // Required so Robolectric resolves real getString(R.string.xxx) lookups against the module's
+    // merged resources.arsc instead of throwing Resources$NotFoundException — needed since
+    // DownloadService now reads its notification text from string resources (i18n).
+    unitTests.includeAndroidResources = true
   }
 }
 

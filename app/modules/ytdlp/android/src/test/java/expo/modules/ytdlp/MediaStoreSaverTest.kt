@@ -49,7 +49,7 @@ class MediaStoreSaverTest {
         val error = assertThrows(UnsupportedOperationException::class.java) {
             MediaStoreSaver.saveToDownloads(context, sourceFile.absolutePath, "song.mp3", "audio/mpeg")
         }
-        assertEquals("Speichern erfordert Android 10 oder neuer.", error.message)
+        assertEquals("errors.saveRequiresAndroid10", error.message)
     }
 
     @Config(sdk = [29])
@@ -60,7 +60,7 @@ class MediaStoreSaverTest {
         val error = assertThrows(IllegalStateException::class.java) {
             MediaStoreSaver.saveToDownloads(context, sourceFile.absolutePath, "song.mp3", "audio/mpeg")
         }
-        assertEquals("Konnte keinen Downloads-Eintrag anlegen.", error.message)
+        assertEquals("errors.saveInsertFailed", error.message)
     }
 
     @Config(sdk = [29])
@@ -73,7 +73,7 @@ class MediaStoreSaverTest {
         val error = assertThrows(IllegalStateException::class.java) {
             MediaStoreSaver.saveToDownloads(context, sourceFile.absolutePath, "song.mp3", "audio/mpeg")
         }
-        assertEquals("Konnte Downloads-Eintrag nicht öffnen.", error.message)
+        assertEquals("errors.saveOpenFailed", error.message)
         verify { resolver.delete(uri, null, null) }
     }
 

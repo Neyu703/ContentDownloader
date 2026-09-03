@@ -12,14 +12,23 @@ function isSignInGateError(message: string): boolean {
   return YOUTUBE_SIGNIN_REQUIRED_PATTERN.test(message);
 }
 
-export function userFacingErrorMessage(err: unknown, fallback?: string): string {
-  const raw = errorMessage(err, fallback);
-  return isSignInGateError(raw)
-    ? "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
-    : raw;
+export interface UserFacingError {
+  key: string;
+  params?: Record<string, string | number>;
 }
 
-/** Same permanent-failure check as userFacingErrorMessage() — used to decide whether a failed download attempt is worth retrying. */
+/**
+ * Preserves userFacingErrorMessage()'s old behavior exactly: `err.message` (or `fallbackRaw`, only
+ * used when `err` isn't an Error instance) passes through as the `errors.raw` param unless it's the
+ * sign-in gate — the caller's fallback strings were always a rare last resort, never the normal
+ * display text, so this must not suppress specific error detail on every ordinary failure.
+ */
+export function userFacingError(err: unknown, fallbackRaw?: string): UserFacingError {
+  const raw = errorMessage(err, fallbackRaw);
+  return isSignInGateError(raw) ? { key: "errors.signInRequired" } : { key: "errors.raw", params: { raw } };
+}
+
+/** Same permanent-failure check as userFacingError() — used to decide whether a failed download attempt is worth retrying. */
 export function isRetryableError(err: unknown): boolean {
   return !isSignInGateError(errorMessage(err));
 }

@@ -2,7 +2,9 @@
 export function createNativeYtdlpMock() {
   return {
     initialize: jest.fn().mockResolvedValue(undefined),
-    getState: jest.fn().mockResolvedValue({ setup: { phase: "ready", message: "", ytdlpVersion: null }, jobs: [] }),
+    getState: jest
+      .fn()
+      .mockResolvedValue({ setup: { phase: "ready", message: "", messageParams: null, ytdlpVersion: null }, jobs: [] }),
     enqueue: jest.fn().mockResolvedValue("native-job-id"),
     getPlaylistInfo: jest.fn().mockResolvedValue({ title: "", entries: [], totalCount: null }),
     cancel: jest.fn().mockResolvedValue(undefined),

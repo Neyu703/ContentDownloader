@@ -28,13 +28,18 @@ export interface JobState {
   totalMB?: number;
   speedMBs?: number;
   etaSeconds: number | null;
+  /** Native only — the raw last yt-dlp output line, genuinely untranslated diagnostic text. */
   lastLine: string;
+  /** Translatable status message (e.g. a retry notice), rendered via `t(lastLineKey, lastLineParams)`. */
+  lastLineKey?: string;
+  lastLineParams?: Record<string, string | number>;
   /** Web: carried over from the preview fetched before submit. Native: resolved by the job itself once fetched. */
   thumbnail?: string | null;
   /** Local file path (native) or download URL (web) once phase is "done". */
   result: string | null;
   ext: "mp3" | "mp4" | null;
-  error: string | null;
+  errorKey?: string;
+  errorParams?: Record<string, string | number>;
   createdAt: number;
   updatedAt: number;
   /** Set when this job was started as part of a playlist download; jobs share one groupId/groupTitle. */
@@ -57,7 +62,9 @@ export interface DownloadRequest {
 
 export interface SetupState {
   phase: SetupPhase;
+  /** Translation key (native) or empty string (web, which has no setup phase). Render via `t(message, messageParams)`. */
   message: string;
+  messageParams?: Record<string, string | number>;
 }
 
 export interface Downloader {
@@ -83,14 +90,3 @@ export interface Downloader {
    */
   getPlaylistInfo(url: string, start: number): Promise<PlaylistInfo>;
 }
-
-export const PHASE_LABELS: Record<JobPhase, string> = {
-  queued: "In der Warteschlange…",
-  fetching_info: "Lade Video-Informationen…",
-  downloading: "Lädt herunter…",
-  converting: "Wird konvertiert…",
-  merging: "Führt Video und Audio zusammen…",
-  done: "Fertig!",
-  error: "Fehlgeschlagen",
-  cancelled: "Abgebrochen",
-};

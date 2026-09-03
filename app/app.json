@@ -2,7 +2,7 @@
   "expo": {
     "name": "Content Downloader",
     "slug": "content-downloader",
-    "version": "1.5.2",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.contentdownloader.app",
-      "versionCode": 12,
+      "versionCode": 13,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,7 +44,8 @@
             "extraProguardRules": "-keep class com.yausername.** { *; }\n-keep class com.fasterxml.jackson.** { *; }\n-keepnames class com.fasterxml.jackson.** { *; }\n-dontwarn com.fasterxml.jackson.databind.**\n-keepclassmembers class com.yausername.youtubedl_android.mapper.** { <fields>; <init>(...); }\n-keep class org.apache.commons.compress.** { *; }\n-dontwarn org.apache.commons.compress.**"
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "extra": {
       "eas": {

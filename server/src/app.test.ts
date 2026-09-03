@@ -43,7 +43,8 @@ describe("GET /api/info", () => {
     vi.mocked(getVideoInfo).mockRejectedValueOnce(new Error("boom"));
     const res = await request(app).get("/api/info").query({ url: VALID_URL });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe("boom");
+    expect(res.body.errorKey).toBe("errors.raw");
+    expect(res.body.errorParams).toEqual({ raw: "boom" });
   });
 });
 
@@ -63,7 +64,7 @@ describe("GET /api/playlist-info", () => {
   it("400s on start=0", async () => {
     const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL, start: "0" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("Ungültiger Startindex.");
+    expect(res.body.errorKey).toBe("errors.invalidStartIndex");
   });
 
   it("400s on a negative start", async () => {
@@ -104,13 +105,13 @@ describe("POST /api/convert", () => {
   it("400s on an invalid format", async () => {
     const res = await request(app).post("/api/convert").send({ url: VALID_URL, format: "pdf", quality: "320" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("Bitte Audio oder Video auswählen.");
+    expect(res.body.errorKey).toBe("errors.invalidFormat");
   });
 
   it("400s on an invalid audio quality", async () => {
     const res = await request(app).post("/api/convert").send({ url: VALID_URL, format: "audio", quality: "999" });
     expect(res.status).toBe(400);
-    expect(res.body.error).toBe("Bitte eine gültige Qualität auswählen.");
+    expect(res.body.errorKey).toBe("errors.invalidQuality");
   });
 
   it("400s on an invalid video quality", async () => {
@@ -128,7 +129,7 @@ describe("POST /api/convert", () => {
     vi.mocked(downloadMedia).mockImplementationOnce((_url, _format, _quality, onProgress) => {
       capturedOnProgress = onProgress;
       return new Promise((resolve) => {
-        onProgress({ stage: "fetching_info", message: "…", progress: null });
+        onProgress({ stage: "fetching_info", messageKey: "job.fetchingInfo", progress: null });
         setTimeout(() => resolve({ id: "file-id", filePath: "/x", title: "Song", ext: "mp3" }), 5);
       });
     });
@@ -184,7 +185,8 @@ describe("POST /api/convert", () => {
       expect(res.body.stage).toBe("error");
     });
     const finalRes = await request(app).get(`/api/job/${jobId}`);
-    expect(finalRes.body.error).toBe("conversion failed");
+    expect(finalRes.body.errorKey).toBe("errors.raw");
+    expect(finalRes.body.errorParams).toEqual({ raw: "conversion failed" });
   });
 });
 

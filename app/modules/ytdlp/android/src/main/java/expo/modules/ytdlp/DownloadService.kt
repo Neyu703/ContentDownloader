@@ -106,12 +106,12 @@ class DownloadService : Service() {
         val percent = job?.progress?.toInt() ?: 0
         val indeterminate = job?.progress == null
 
-        val title = job?.title ?: DownloadQueue.setupMessage.ifEmpty { "Wird vorbereitet…" }
+        val title = job?.title ?: setupPhaseLabel(DownloadQueue.setupPhase)
         val text = buildString {
-            append(if (job != null) phaseLabel(job.phase) else "Bitte warten")
+            append(if (job != null) phaseLabel(job.phase) else getString(R.string.notification_please_wait))
             job?.progress?.let { append(" · ${it.toInt()} %") }
-            job?.etaSeconds?.takeIf { it > 0 }?.let { append(" · noch ${formatEta(it)}") }
-            if (queued > 0) append(" · +$queued in der Warteschlange")
+            job?.etaSeconds?.takeIf { it > 0 }?.let { append(" · ${getString(R.string.notification_eta_suffix, formatEta(it))}") }
+            if (queued > 0) append(" · ${getString(R.string.notification_queue_suffix, queued)}")
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
@@ -123,21 +123,27 @@ class DownloadService : Service() {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setProgress(100, percent, indeterminate)
-            .addAction(0, "Alle abbrechen", cancelAllIntent())
+            .addAction(0, getString(R.string.notification_cancel_all), cancelAllIntent())
 
         openAppIntent()?.let { builder.setContentIntent(it) }
         return builder.build()
     }
 
     internal fun phaseLabel(phase: JobPhase): String = when (phase) {
-        JobPhase.QUEUED -> "In der Warteschlange"
-        JobPhase.FETCHING_INFO -> "Lädt Video-Informationen"
-        JobPhase.DOWNLOADING -> "Lädt herunter"
-        JobPhase.CONVERTING -> "Konvertiert"
-        JobPhase.MERGING -> "Führt Video und Audio zusammen"
-        JobPhase.DONE -> "Fertig"
-        JobPhase.ERROR -> "Fehlgeschlagen"
-        JobPhase.CANCELLED -> "Abgebrochen"
+        JobPhase.QUEUED -> getString(R.string.phase_queued)
+        JobPhase.FETCHING_INFO -> getString(R.string.phase_fetching_info)
+        JobPhase.DOWNLOADING -> getString(R.string.phase_downloading)
+        JobPhase.CONVERTING -> getString(R.string.phase_converting)
+        JobPhase.MERGING -> getString(R.string.phase_merging)
+        JobPhase.DONE -> getString(R.string.phase_done)
+        JobPhase.ERROR -> getString(R.string.phase_error)
+        JobPhase.CANCELLED -> getString(R.string.phase_cancelled)
+    }
+
+    /** Notification title shown while no job exists yet (one-time setup). Mirrors setup.preparing/setup.updating in app/i18n, but resolved from Android string resources since this renders outside the JS bridge. */
+    internal fun setupPhaseLabel(phase: SetupPhase): String = when (phase) {
+        SetupPhase.UPDATING -> getString(R.string.notification_updating)
+        else -> getString(R.string.notification_preparing)
     }
 
     private fun formatEta(seconds: Long): String {
@@ -173,10 +179,10 @@ class DownloadService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Downloads",
+            getString(R.string.notification_channel_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Zeigt den Fortschritt laufender Downloads"
+            description = getString(R.string.notification_channel_description)
             setShowBadge(false)
         }
         notificationManager().createNotificationChannel(channel)

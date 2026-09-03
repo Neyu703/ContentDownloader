@@ -1,6 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { PlaylistPickerModal, type PlaylistPickerViewState } from "./PlaylistPickerModal";
 import type { PlaylistEntry } from "../downloader/types";
+import { initI18n } from "../i18n";
+
+// PlaylistPickerModal renders every label via useTranslation()'s t(), which otherwise returns the raw key.
+initI18n("de");
 
 const ENTRIES: PlaylistEntry[] = [
   { id: "a", url: "u1", title: "Video A", thumbnail: null, duration: 60 },

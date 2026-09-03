@@ -1,4 +1,5 @@
 import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
 import type { MediaFormat, PlaylistInfo } from "../downloader/types";
 import { isAllPlaylistEntriesSelected, playlistConfirmLabel } from "../lib/format";
 import { styles } from "../styles";
@@ -27,6 +28,7 @@ export function PlaylistPickerModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   // Conditionally rendering the Modal element itself (instead of always rendering it with a
   // toggled `visible` prop) so closing it fully unmounts the portal — react-native-web's Modal was
   // observed staying visible with stale/empty content after `visible` flipped to false shortly
@@ -45,7 +47,7 @@ export function PlaylistPickerModal({
             {picker.info.totalCount != null ? ` (${picker.info.totalCount})` : ""}
           </Text>
           <Pressable style={styles.linkButton} onPress={onToggleAll}>
-            <Text style={styles.linkText}>{allSelected ? "Alle abwählen" : "Alle auswählen"}</Text>
+            <Text style={styles.linkText}>{allSelected ? t("playlist.deselectAll") : t("playlist.selectAll")}</Text>
           </Pressable>
           {/* FlatList virtualizes rows (only mounts what's on screen) so playlists with thousands of
               entries stay smooth, and onEndReached drives infinite-scroll paging. */}
@@ -64,19 +66,19 @@ export function PlaylistPickerModal({
             onEndReachedThreshold={0.5}
             onEndReached={onLoadMore}
             ListFooterComponent={
-              picker.isLoadingMore ? <Text style={styles.searchMessage}>Lädt weitere Videos…</Text> : null
+              picker.isLoadingMore ? <Text style={styles.searchMessage}>{t("playlist.loadingMore")}</Text> : null
             }
           />
           <View style={styles.jobActions}>
             <Pressable style={styles.secondaryButton} onPress={onCancel}>
-              <Text style={styles.buttonText}>Abbrechen</Text>
+              <Text style={styles.buttonText}>{t("playlist.cancel")}</Text>
             </Pressable>
             <Pressable
               style={[styles.button, picker.selected.size === 0 && styles.buttonDisabled]}
               onPress={onConfirm}
               disabled={picker.selected.size === 0}
             >
-              <Text style={styles.buttonText}>{playlistConfirmLabel(format, picker.selected.size)}</Text>
+              <Text style={styles.buttonText}>{playlistConfirmLabel(t, format, picker.selected.size)}</Text>
             </Pressable>
           </View>
         </View>

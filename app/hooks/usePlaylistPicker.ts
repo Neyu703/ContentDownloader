@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { TFunction } from "i18next";
 import { downloader } from "../downloader";
 import type { MediaFormat, PlaylistInfo, PreviewPatch } from "../downloader/types";
 import { generateGroupId, isAllPlaylistEntriesSelected } from "../lib/format";
@@ -30,8 +31,9 @@ export function usePlaylistPicker(params: {
   submit: SubmitFn;
   setSubmitError: (message: string | null) => void;
   onUrlConsumed: () => void;
+  t: TFunction;
 }) {
-  const { format, quality, submit, setSubmitError, onUrlConsumed } = params;
+  const { format, quality, submit, setSubmitError, onUrlConsumed, t } = params;
   const [playlistPicker, setPlaylistPicker] = useState<PlaylistPickerState | null>(null);
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
 
@@ -48,7 +50,7 @@ export function usePlaylistPicker(params: {
         noMorePages: info.entries.length === 0,
       });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Playlist konnte nicht geladen werden.");
+      setSubmitError(err instanceof Error ? err.message : t("errors.playlistInfoFailed"));
     } finally {
       setIsPlaylistLoading(false);
     }

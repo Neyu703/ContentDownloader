@@ -12,7 +12,9 @@ export type NativePlaylistInfo = PlaylistInfo;
 
 export interface NativeSetupState {
   phase: SetupPhase;
+  /** A translation key (see app/i18n), not display text. */
   message: string;
+  messageParams: Record<string, unknown> | null;
   ytdlpVersion: string | null;
 }
 
@@ -28,10 +30,16 @@ export interface NativeJob {
   thumbnail: string | null;
   progress: number | null;
   etaSeconds: number | null;
+  /** Raw last yt-dlp output line — untranslated diagnostic text. */
   lastLine: string;
+  /** Translation key for a higher-level status (e.g. a retry notice), overriding `lastLine` while set. */
+  lastLineKey: string | null;
+  lastLineParams: Record<string, unknown> | null;
   filePath: string | null;
   ext: "mp3" | "mp4" | null;
+  /** A translation key (e.g. "errors.signInRequired"), not display text, once set. */
   error: string | null;
+  errorParams: Record<string, unknown> | null;
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;

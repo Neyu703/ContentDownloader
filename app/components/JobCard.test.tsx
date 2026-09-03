@@ -2,6 +2,10 @@ import { Alert } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { JobCard } from "./JobCard";
 import type { JobState } from "../downloader/types";
+import { initI18n } from "../i18n";
+
+// JobCard renders every label via useTranslation()'s t(), which otherwise returns the raw key.
+initI18n("de");
 
 const BASE_JOB: JobState = {
   id: "1",
@@ -20,7 +24,6 @@ const BASE_JOB: JobState = {
   thumbnail: "https://example.com/thumb.jpg",
   result: null,
   ext: null,
-  error: null,
   createdAt: Date.now() - 5000,
   updatedAt: Date.now(),
 };
@@ -69,11 +72,25 @@ describe("JobCard — header", () => {
 });
 
 describe("JobCard — phase-specific body", () => {
-  it("shows the error message and no progress UI on error", async () => {
+  it("shows the translated error message and no progress UI on error", async () => {
     await render(
-      <JobCard job={{ ...BASE_JOB, phase: "error", error: "Netzwerkfehler" }} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />
+      <JobCard
+        job={{ ...BASE_JOB, phase: "error", errorKey: "errors.raw", errorParams: { raw: "Netzwerkfehler" } }}
+        now={Date.now()}
+        onCancel={noop}
+        onRetry={noop}
+        onShare={noop}
+        isSharing={false}
+      />
     );
     expect(screen.getByText("Netzwerkfehler")).toBeTruthy();
+  });
+
+  it("falls back to the generic unknown-error text when no errorKey is set", async () => {
+    await render(
+      <JobCard job={{ ...BASE_JOB, phase: "error", errorKey: undefined }} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />
+    );
+    expect(screen.getByText("Unbekannter Fehler.")).toBeTruthy();
   });
 
   it("shows the PHASE_LABELS text for done", async () => {
@@ -222,6 +239,21 @@ describe("JobCard — details expand/collapse and debug lines", () => {
     expect(screen.queryByText("[download] 42%")).toBeNull();
   });
 
+  it("prefers the translated lastLineKey over the raw lastLine text when both are present", async () => {
+    await render(
+      <JobCard
+        job={{ ...BASE_JOB, lastLineKey: "job.retrying", lastLineParams: { attempt: 2, maxAttempts: 3 } }}
+        now={Date.now()}
+        onCancel={noop}
+        onRetry={noop}
+        onShare={noop}
+        isSharing={false}
+      />
+    );
+    expect(screen.getByText("Erneuter Versuch (2/3)…")).toBeTruthy();
+    expect(screen.queryByText("[download] 42%")).toBeNull();
+  });
+
   it("hides the details toggle and box entirely when there's nothing informative to show yet", async () => {
     const emptyJob: JobState = {
       ...BASE_JOB,
@@ -257,7 +289,7 @@ describe("JobCard — actions", () => {
   it("shows Erneut versuchen on error and calls onRetry", async () => {
     const onRetry = jest.fn();
     await render(
-      <JobCard job={{ ...BASE_JOB, phase: "error", error: "x" }} now={Date.now()} onCancel={noop} onRetry={onRetry} onShare={noop} isSharing={false} />
+      <JobCard job={{ ...BASE_JOB, phase: "error" }} now={Date.now()} onCancel={noop} onRetry={onRetry} onShare={noop} isSharing={false} />
     );
     await fireEvent.press(screen.getByText("Erneut versuchen"));
     expect(onRetry).toHaveBeenCalled();

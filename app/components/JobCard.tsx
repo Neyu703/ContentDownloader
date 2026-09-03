@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Animated, Easing, Image, Pressable, Text, View } from "react-native";
-import { PHASE_LABELS, type JobState } from "../downloader/types";
+import { useTranslation } from "react-i18next";
+import { type JobState } from "../downloader/types";
 import {
   estimateAudioSizeMB,
   formatDuration,
@@ -36,6 +37,7 @@ export function JobCard({
   /** Native only — omitted entirely on web, where the single button already saves via the browser. */
   onSave?: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [debugBoxHeight, setDebugBoxHeight] = useState(0);
@@ -51,6 +53,8 @@ export function JobCard({
       : null;
   const etaLabel = job.etaSeconds != null && job.etaSeconds > 0 ? formatSecondsShort(job.etaSeconds) : null;
   const extLabel = (job.ext ?? "").toUpperCase();
+  const errorText = t(job.errorKey ?? "errors.unknown", job.errorParams);
+  const statusText = job.lastLineKey ? t(job.lastLineKey, job.lastLineParams) : job.lastLine;
   // "Läuft seit" alone isn't informative enough to justify showing the details toggle — only count
   // it once there's at least one real data point (progress, size, speed, ETA, or a raw yt-dlp line).
   const hasDebugInfo =
@@ -59,11 +63,11 @@ export function JobCard({
     estimatedFinalMB != null ||
     job.speedMBs != null ||
     etaLabel != null ||
-    job.lastLine !== "";
+    statusText !== "";
   const statusLabel = (
     <Text style={styles.statusText}>
-      {PHASE_LABELS[job.phase]}
-      {isStalled ? " · läuft weiter, YouTube antwortet gerade langsam" : ""}
+      {t(`phase.${job.phase}`)}
+      {isStalled ? t("jobCard.stalledSuffix") : ""}
     </Text>
   );
 
@@ -97,14 +101,10 @@ export function JobCard({
     if (saveState === "saved") {
       // Prevents the case that prompted this: tapping "speichern" twice creates two files in
       // Downloads (MediaStore auto-dedupes the name instead of overwriting).
-      Alert.alert(
-        "Bereits gespeichert",
-        "Diese Datei liegt schon in Downloads. Nochmal speichern legt eine weitere Kopie an.",
-        [
-          { text: "Abbrechen", style: "cancel" },
-          { text: "Nochmal speichern", onPress: doSave },
-        ]
-      );
+      Alert.alert(t("jobCard.alreadySavedTitle"), t("jobCard.alreadySavedBody"), [
+        { text: t("jobCard.alreadySavedCancel"), style: "cancel" },
+        { text: t("jobCard.alreadySavedConfirm"), onPress: doSave },
+      ]);
       return;
     }
     doSave();
@@ -125,16 +125,16 @@ export function JobCard({
       </View>
 
       {job.phase === "error" ? (
-        <Text style={styles.errorText}>{job.error}</Text>
+        <Text style={styles.errorText}>{errorText}</Text>
       ) : job.phase === "done" || job.phase === "cancelled" ? (
-        <Text style={styles.statusText}>{PHASE_LABELS[job.phase]}</Text>
+        <Text style={styles.statusText}>{t(`phase.${job.phase}`)}</Text>
       ) : (
         <>
           {hasDebugInfo ? (
             <Pressable
               style={styles.statusRow}
               onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
-              accessibilityLabel={isDetailsExpanded ? "Details einklappen" : "Details ausklappen"}
+              accessibilityLabel={isDetailsExpanded ? t("jobCard.detailsCollapse") : t("jobCard.detailsExpand")}
             >
               {statusLabel}
               <View style={styles.collapseButton}>
@@ -184,21 +184,28 @@ export function JobCard({
                 onLayout={(e) => setDebugBoxHeight(e.nativeEvent.layout.height)}
                 style={styles.debugBox}
               >
-                {job.progress != null && <Text style={styles.debugLine}>Fortschritt: {job.progress.toFixed(1)}%</Text>}
+                {job.progress != null && (
+                  <Text style={styles.debugLine}>{t("jobCard.progressLabel", { percent: job.progress.toFixed(1) })}</Text>
+                )}
                 {job.totalMB != null && (
                   <Text style={styles.debugLine}>
-                    Heruntergeladen: {job.downloadedMB != null ? formatMB(job.downloadedMB) : "?"} / {formatMB(job.totalMB)}
+                    {t("jobCard.downloadedLabel", {
+                      downloaded: job.downloadedMB != null ? formatMB(job.downloadedMB) : t("jobCard.downloadedUnknown"),
+                      total: formatMB(job.totalMB),
+                    })}
                   </Text>
                 )}
                 {estimatedFinalMB != null && (
-                  <Text style={styles.debugLine}>Geschätzte Endgröße: ~{formatMB(estimatedFinalMB)}</Text>
+                  <Text style={styles.debugLine}>{t("jobCard.estimatedSizeLabel", { size: formatMB(estimatedFinalMB) })}</Text>
                 )}
-                {job.speedMBs != null && <Text style={styles.debugLine}>Geschwindigkeit: {job.speedMBs.toFixed(2)} MB/s</Text>}
-                {etaLabel && <Text style={styles.debugLine}>ETA: {etaLabel}</Text>}
-                <Text style={styles.debugLine}>Läuft seit: {formatElapsed(now - job.createdAt)}</Text>
-                {job.lastLine !== "" && (
+                {job.speedMBs != null && (
+                  <Text style={styles.debugLine}>{t("jobCard.speedLabel", { speed: job.speedMBs.toFixed(2) })}</Text>
+                )}
+                {etaLabel && <Text style={styles.debugLine}>{t("jobCard.etaLabel", { eta: etaLabel })}</Text>}
+                <Text style={styles.debugLine}>{t("jobCard.runningSinceLabel", { elapsed: formatElapsed(now - job.createdAt) })}</Text>
+                {statusText !== "" && (
                   <Text style={styles.debugLine} numberOfLines={1}>
-                    {job.lastLine}
+                    {statusText}
                   </Text>
                 )}
               </View>
@@ -210,12 +217,12 @@ export function JobCard({
       <View style={styles.jobActions}>
         {!isFinished && (
           <Pressable style={styles.secondaryButton} onPress={onCancel}>
-            <Text style={styles.buttonText}>Abbrechen</Text>
+            <Text style={styles.buttonText}>{t("jobCard.cancel")}</Text>
           </Pressable>
         )}
         {job.phase === "error" && (
           <Pressable style={styles.secondaryButton} onPress={onRetry}>
-            <Text style={styles.buttonText}>Erneut versuchen</Text>
+            <Text style={styles.buttonText}>{t("jobCard.tryAgain")}</Text>
           </Pressable>
         )}
         {job.phase === "done" && onSave && (
@@ -227,26 +234,26 @@ export function JobCard({
             >
               <Text style={styles.downloadButtonText}>
                 {saveState === "saving"
-                  ? "Speichert…"
+                  ? t("jobCard.saving")
                   : saveState === "saved"
-                    ? "In Downloads gespeichert ✓"
-                    : `${extLabel} speichern`}
+                    ? t("jobCard.savedCheck")
+                    : t("jobCard.save", { ext: extLabel })}
               </Text>
             </Pressable>
             <Pressable style={styles.secondaryButton} onPress={onShare} disabled={isSharing}>
-              <Text style={styles.buttonText}>{isSharing ? "…" : "Teilen"}</Text>
+              <Text style={styles.buttonText}>{isSharing ? t("jobCard.sharingEllipsis") : t("jobCard.share")}</Text>
             </Pressable>
           </>
         )}
         {job.phase === "done" && !onSave && (
           <Pressable style={[styles.downloadButton, isSharing && styles.buttonDisabled]} onPress={onShare} disabled={isSharing}>
             <Text style={styles.downloadButtonText}>
-              {isSharing ? "Lädt herunter…" : `${extLabel} herunterladen`}
+              {isSharing ? t("jobCard.downloadingEllipsis") : t("jobCard.downloadExt", { ext: extLabel })}
             </Text>
           </Pressable>
         )}
       </View>
-      {saveState === "error" && <Text style={styles.errorText}>Speichern fehlgeschlagen.</Text>}
+      {saveState === "error" && <Text style={styles.errorText}>{t("jobCard.saveFailed")}</Text>}
     </View>
   );
 }

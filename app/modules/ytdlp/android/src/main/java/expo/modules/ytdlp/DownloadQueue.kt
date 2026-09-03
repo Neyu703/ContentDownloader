@@ -79,12 +79,17 @@ object DownloadQueue {
     private val _revision = MutableStateFlow(0L)
     val revision: StateFlow<Long> = _revision.asStateFlow()
 
+    @Volatile
+    var setupMessageParams: Map<String, Any?>? = null
+        private set
+
     fun snapshot(): Map<String, Any?> {
         val list = synchronized(lock) { jobs.map { it.toMap() } }
         return mapOf(
             "setup" to mapOf(
                 "phase" to setupPhase.jsName,
                 "message" to setupMessage,
+                "messageParams" to setupMessageParams,
                 "ytdlpVersion" to ytdlpVersion
             ),
             "jobs" to list
@@ -113,12 +118,12 @@ object DownloadQueue {
         setupMutex.withLock {
             if (setupPhase == SetupPhase.READY) return
             try {
-                setSetup(SetupPhase.PREPARING, "Bereite yt-dlp vor…")
+                setSetup(SetupPhase.PREPARING, "setup.preparing")
                 engine.init(appContext)
                 ffmpeg.init(appContext)
                 ytdlpVersion = engine.version(appContext)
 
-                setSetup(SetupPhase.UPDATING, "Suche nach yt-dlp-Update…")
+                setSetup(SetupPhase.UPDATING, "setup.updating")
                 try {
                     engine.updateYoutubeDL(appContext, YoutubeDL.UpdateChannel.NIGHTLY)
                     ytdlpVersion = engine.version(appContext)
@@ -128,10 +133,11 @@ object DownloadQueue {
                     DebugLog.addError("yt-dlp update skipped (bundled binary still used)", updateError)
                 }
 
-                setSetup(SetupPhase.READY, "yt-dlp ${ytdlpVersion ?: "?"} bereit")
+                setSetup(SetupPhase.READY, "setup.ready", mapOf("version" to (ytdlpVersion ?: "?")))
             } catch (error: Throwable) {
                 DebugLog.addError("setup failed", error)
-                setSetup(SetupPhase.FAILED, describeError(error))
+                val (key, params) = describeError(error)
+                setSetup(SetupPhase.FAILED, key, params)
                 throw error
             }
         }
@@ -161,7 +167,7 @@ object DownloadQueue {
 
     private fun requireValidYoutubeUrl(url: String) {
         if (!isValidYoutubeUrl(url)) {
-            throw IllegalArgumentException("Ungültiger Link – nur YouTube wird unterstützt.")
+            throw IllegalArgumentException("errors.invalidYoutubeUrl")
         }
     }
 
@@ -258,7 +264,9 @@ object DownloadQueue {
         } catch (error: Throwable) {
             Log.e(TAG, "job ${job.id} failed", error)
             DebugLog.addError("job ${job.id} (${job.url}) failed", error)
-            job.error = describeError(error)
+            val (key, params) = describeError(error)
+            job.error = key
+            job.errorParams = params
             advance(job, JobPhase.ERROR)
         } finally {
             if (job.finishedAt == null) job.finishedAt = System.currentTimeMillis()
@@ -280,7 +288,7 @@ object DownloadQueue {
 
         val produced = File(outputDir, "${job.id}.$ext")
         if (!produced.exists()) {
-            throw IllegalStateException("yt-dlp hat keine Datei erzeugt.")
+            throw IllegalStateException("errors.noFileProduced")
         }
         // yt-dlp names the file by job id (a UUID); rename to the video title so both the
         // share sheet and the save-to-Downloads flow offer a real, human filename.
@@ -297,7 +305,8 @@ object DownloadQueue {
     private suspend fun downloadWithRetry(job: DownloadJob, outputDir: File, ext: String) {
         for (attempt in 1..MAX_ATTEMPTS) {
             if (attempt > 1) {
-                job.lastLine = "Erneuter Versuch ($attempt/$MAX_ATTEMPTS)…"
+                job.lastLineKey = "job.retrying"
+                job.lastLineParams = mapOf("attempt" to attempt, "maxAttempts" to MAX_ATTEMPTS)
                 touch()
             }
             try {
@@ -381,7 +390,14 @@ object DownloadQueue {
         if (job.phase.isFinished) return
 
         val trimmed = line.trim()
-        if (trimmed.isNotEmpty()) job.lastLine = trimmed
+        if (trimmed.isNotEmpty()) {
+            job.lastLine = trimmed
+            // A fresh raw output line means the job is actively progressing again — clear any
+            // leftover "job.retrying" status key from downloadWithRetry() so it doesn't keep
+            // masking real progress after a retry succeeds.
+            job.lastLineKey = null
+            job.lastLineParams = null
+        }
         if (progress >= 0f) job.progress = progress.toDouble()
         if (eta >= 0L) job.etaSeconds = eta
 
@@ -404,10 +420,11 @@ object DownloadQueue {
         touch()
     }
 
-    internal fun setSetup(phase: SetupPhase, message: String) {
+    internal fun setSetup(phase: SetupPhase, messageKey: String, messageParams: Map<String, Any?>? = null) {
         setupPhase = phase
-        setupMessage = message
-        DebugLog.add("setup -> ${phase.jsName}: $message")
+        setupMessage = messageKey
+        setupMessageParams = messageParams
+        DebugLog.add("setup -> ${phase.jsName}: $messageKey")
         touch()
     }
 
@@ -419,16 +436,16 @@ object DownloadQueue {
      * yt-dlp surfaces YouTube's own "Sign in to confirm you're not a bot" gate verbatim, including
      * a raw stack of wiki links — not actionable for a user, since it requires real logged-in
      * cookies to bypass, not anything this app can retry or work around on its own. Mirrors
-     * userFacingErrorMessage() in server/src/utils.ts. The full technical error still reaches
-     * DebugLog.addError() separately (called with the raw Throwable before this runs), so nothing
-     * is lost for debugging.
+     * userFacingError() in server/src/utils.ts, returning a translation key (+ optional params)
+     * instead of rendered text. The full technical error still reaches DebugLog.addError()
+     * separately (called with the raw Throwable before this runs), so nothing is lost for debugging.
      */
-    internal fun describeError(error: Throwable): String {
+    internal fun describeError(error: Throwable): Pair<String, Map<String, Any?>?> {
         val raw = describeErrorRaw(error)
         return if (isSignInGateError(raw)) {
-            "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
+            "errors.signInRequired" to null
         } else {
-            raw
+            "errors.raw" to mapOf("raw" to raw)
         }
     }
 
