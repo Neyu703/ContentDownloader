@@ -2,5 +2,7 @@ packages:
   - "app"
   - "server"
 allowBuilds:
+  '@parcel/watcher': set this to true or false
   esbuild: true
+  unrs-resolver: set this to true or false
 nodeLinker: hoisted
