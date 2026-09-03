@@ -19,6 +19,7 @@ android/.gradle/
 android/.kotlin/
 android/.cxx/
 android/local.properties
+**/android/.gradle/
 *.iml
 
 # signing / keys
