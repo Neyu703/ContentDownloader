@@ -4,26 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { errorMessage } from "./utils.js";
+import { writeLog } from "./downloadLog.js";
+import { parseProgressLine, type ProgressUpdate } from "./progress.js";
 
 export const DOWNLOADS_DIR = path.join(process.cwd(), "downloads");
-export const LOGS_DIR = path.join(process.cwd(), "logs");
-const MAX_LOG_FILES = 10;
-
-function pruneLogs(): void {
-  const files = fs
-    .readdirSync(LOGS_DIR)
-    .map((name) => ({ name, mtime: fs.statSync(path.join(LOGS_DIR, name)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
-  for (const file of files.slice(MAX_LOG_FILES)) {
-    fs.unlinkSync(path.join(LOGS_DIR, file.name));
-  }
-}
-
-function writeLog(id: string, lines: string[]): void {
-  fs.mkdirSync(LOGS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(LOGS_DIR, `${id}.log`), lines.join("\n") + "\n", "utf-8");
-  pruneLogs();
-}
 
 export type MediaFormat = "audio" | "video";
 export const AUDIO_QUALITIES = ["128", "192", "320"] as const;
@@ -60,28 +44,7 @@ export interface PlaylistInfo {
   totalCount: number | null;
 }
 
-export interface ProgressUpdate {
-  stage: "fetching_info" | "downloading" | "converting";
-  message: string;
-  progress: number | null;
-  downloadedMB?: number;
-  totalMB?: number;
-  speedMBs?: number;
-  eta?: string;
-}
-
-// Matches yt-dlp's --newline progress output, e.g. "[download]  42.3% of ~10.00MiB at 1.20MiB/s ETA 00:07".
-const DOWNLOAD_PROGRESS_PATTERN =
-  /\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\w+)(?:\s+at\s+([\d.]+\w+\/s|Unknown speed))?(?:\s+ETA\s+(\S+))?/;
-
-function parseSizeToMB(text: string): number | null {
-  const match = text.match(/([\d.]+)\s*(K|M|G)?i?B/i);
-  if (!match) return null;
-  const value = parseFloat(match[1]);
-  const unit = (match[2] ?? "").toUpperCase();
-  const multiplier = unit === "G" ? 1024 : unit === "K" ? 1 / 1024 : 1;
-  return value * multiplier;
-}
+export type { ProgressUpdate };
 
 /**
  * Builds a stream `data` handler that always accumulates the full text (for callers that need the
@@ -228,38 +191,6 @@ export async function getPlaylistInfo(
   }
 
   return { title, entries, totalCount };
-}
-
-/** Interprets one line of yt-dlp's --newline output as a progress update, or null if it's not one. */
-function parseProgressLine(line: string, format: MediaFormat): ProgressUpdate | null {
-  const downloadMatch = line.match(DOWNLOAD_PROGRESS_PATTERN);
-  if (downloadMatch) {
-    const pct = parseFloat(downloadMatch[1]);
-    const totalMB = parseSizeToMB(downloadMatch[2]);
-    const speedMBs = downloadMatch[3] && downloadMatch[3] !== "Unknown speed" ? parseSizeToMB(downloadMatch[3]) : null;
-    const eta = downloadMatch[4] && downloadMatch[4] !== "Unknown" ? downloadMatch[4] : null;
-    const downloadedMB = totalMB != null ? (totalMB * pct) / 100 : null;
-    return {
-      stage: "downloading",
-      message: `Wird heruntergeladen… (${pct.toFixed(1)}%)`,
-      progress: pct,
-      downloadedMB: downloadedMB ?? undefined,
-      totalMB: totalMB ?? undefined,
-      speedMBs: speedMBs ?? undefined,
-      eta: eta ?? undefined,
-    };
-  }
-  if (line.includes("[ExtractAudio]") || line.includes("[ffmpeg]")) {
-    return {
-      stage: "converting",
-      message: format === "audio" ? "Konvertiere zu MP3…" : "Verarbeite Video…",
-      progress: null,
-    };
-  }
-  if (line.includes("[Merger]")) {
-    return { stage: "converting", message: "Führe Video und Audio zusammen…", progress: null };
-  }
-  return null;
 }
 
 function buildFormatArgs(format: MediaFormat, quality: string): string[] {
