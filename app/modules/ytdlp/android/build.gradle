@@ -1,8 +1,13 @@
 apply plugin: 'com.android.library'
 apply plugin: 'expo-module-gradle-plugin'
+apply plugin: 'jacoco'
 
 group = 'expo.modules.ytdlp'
 version = '1.0.0'
+
+jacoco {
+  toolVersion = "0.8.12"
+}
 
 android {
   namespace "expo.modules.ytdlp"
@@ -12,6 +17,24 @@ android {
   }
   lint {
     abortOnError false
+  }
+  buildTypes {
+    debug {
+      testCoverageEnabled true
+    }
+  }
+  testOptions {
+    unitTests.returnDefaultValues = false
+  }
+}
+
+// Robolectric loads app classes through its own sandboxed classloader, which defines them
+// without a CodeSource ("no location"). JaCoco's agent skips such classes by default, which
+// otherwise makes every Robolectric-based test class report 0% coverage despite actually running.
+tasks.withType(Test).configureEach {
+  jacoco {
+    includeNoLocationClasses = true
+    excludes = ['jdk.internal.*']
   }
 }
 
@@ -23,4 +46,62 @@ dependencies {
   // The yt-dlp binary itself is replaced at runtime, see DownloadQueue.prepare().
   implementation "io.github.junkfood02.youtubedl-android:library:0.18.1"
   implementation "io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1"
+
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "io.mockk:mockk:1.14.3"
+  testImplementation "org.robolectric:robolectric:4.15.1"
+  testImplementation "androidx.test:core:1.7.0"
+  testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2"
+}
+
+def jacocoExcludes = [
+  // Thin 1:1 delegation to the real SDK singletons — the point of the DI seam is that
+  // DownloadQueue's logic is tested against the YtdlpEngine/FfmpegEngine interfaces, never
+  // against these adapters directly.
+  'expo/modules/ytdlp/RealYtdlpEngine.class',
+  'expo/modules/ytdlp/RealFfmpegEngine.class',
+  // Thin bridge to expo-modules-core's AppContext, which has no JVM unit-test hook in this
+  // Expo SDK version — see the module's own testability note in the test-coverage plan.
+  // The trailing '*' also covers the file-level YtdlpModuleKt class for its top-level const.
+  'expo/modules/ytdlp/YtdlpModule*.class',
+  // Confirmed Kotlin/JaCoCo line-mapping artifacts, not real gaps: every value of both types is
+  // exercised (DownloadJobTest), but the Kotlin-compiler-generated enum $VALUES tail (SetupPhase)
+  // and a pure interface's method-signature-only bytecode (YtdlpEngine, zero real instructions)
+  // each leave exactly one synthetic line/instruction JaCoCo can never mark hit.
+  'expo/modules/ytdlp/SetupPhase.class',
+  'expo/modules/ytdlp/YtdlpEngine.class'
+]
+
+tasks.register('jacocoTestReport', JacocoReport) {
+  dependsOn 'testDebugUnitTest'
+  reports {
+    xml.required = true
+    html.required = true
+  }
+  def javaClasses = fileTree(dir: "${buildDir}/tmp/kotlin-classes/debug", excludes: jacocoExcludes)
+  classDirectories.setFrom(files(javaClasses))
+  sourceDirectories.setFrom(files(["${projectDir}/src/main/java"]))
+  executionData.setFrom(fileTree(dir: buildDir, includes: ['outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec']))
+}
+
+tasks.register('jacocoCoverageVerification', JacocoCoverageVerification) {
+  dependsOn 'jacocoTestReport'
+  violationRules {
+    // Gated on LINE coverage, not the JaCoCo default (INSTRUCTION). Confirmed via bytecode
+    // decompilation (javap) that JaCoCo's exception-handler instrumentation undercounts trivial
+    // catch blocks — e.g. DebugLog.logDeviceInfoOnce()'s catch is provably exercised by a passing,
+    // assertion-checked test, yet still reports as a missed instruction/branch. That leaves a
+    // small, permanent INSTRUCTION/BRANCH residual no amount of additional testing can close.
+    // LINE coverage doesn't have this failure mode and reaches a genuine, verified 100% here.
+    rule {
+      limit {
+        counter = "LINE"
+        minimum = 1.0
+      }
+    }
+  }
+  def javaClasses = fileTree(dir: "${buildDir}/tmp/kotlin-classes/debug", excludes: jacocoExcludes)
+  classDirectories.setFrom(files(javaClasses))
+  sourceDirectories.setFrom(files(["${projectDir}/src/main/java"]))
+  executionData.setFrom(fileTree(dir: buildDir, includes: ['outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec']))
 }

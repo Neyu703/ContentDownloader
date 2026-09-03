@@ -83,7 +83,7 @@ class DownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun goForeground() {
+    internal fun goForeground() {
         if (inForeground) return
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
@@ -108,7 +108,7 @@ class DownloadService : Service() {
 
         val title = job?.title ?: DownloadQueue.setupMessage.ifEmpty { "Wird vorbereitet…" }
         val text = buildString {
-            append(job?.let { phaseLabel(it.phase) } ?: "Bitte warten")
+            append(if (job != null) phaseLabel(job.phase) else "Bitte warten")
             job?.progress?.let { append(" · ${it.toInt()} %") }
             job?.etaSeconds?.takeIf { it > 0 }?.let { append(" · noch ${formatEta(it)}") }
             if (queued > 0) append(" · +$queued in der Warteschlange")
@@ -129,7 +129,7 @@ class DownloadService : Service() {
         return builder.build()
     }
 
-    private fun phaseLabel(phase: JobPhase): String = when (phase) {
+    internal fun phaseLabel(phase: JobPhase): String = when (phase) {
         JobPhase.QUEUED -> "In der Warteschlange"
         JobPhase.FETCHING_INFO -> "Lädt Video-Informationen"
         JobPhase.DOWNLOADING -> "Lädt herunter"
