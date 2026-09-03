@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { errorMessage, userFacingErrorMessage } from "./utils.js";
+import { errorMessage, isRetryableError, userFacingErrorMessage } from "./utils.js";
 
 describe("errorMessage", () => {
   it("returns the message of a real Error", () => {
@@ -31,5 +31,15 @@ describe("userFacingErrorMessage", () => {
 
   it("passes through a non-matching message unchanged", () => {
     expect(userFacingErrorMessage(new Error("network timeout"))).toBe("network timeout");
+  });
+});
+
+describe("isRetryableError", () => {
+  it("is false for the known-permanent sign-in gate", () => {
+    expect(isRetryableError(new Error("ERROR: Sign in to confirm you're not a bot"))).toBe(false);
+  });
+
+  it("is true for any other error", () => {
+    expect(isRetryableError(new Error("HTTP Error 403: Forbidden"))).toBe(true);
   });
 });

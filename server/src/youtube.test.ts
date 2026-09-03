@@ -478,19 +478,85 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     expect(update.totalMB).toBeCloseTo(500);
   });
 
-  it("propagates a download failure, still writes the log, and includes the error in it", async () => {
+  it("propagates a non-retryable failure (sign-in gate) immediately without retrying, still writes the log", async () => {
     const infoChild = createFakeChild();
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", vi.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
-    downloadChild.stderr.emit("data", Buffer.from("disk full"));
+    downloadChild.stderr.emit("data", Buffer.from("ERROR: Sign in to confirm you're not a bot"));
     downloadChild.emit("close", 1);
-    await expect(promise).rejects.toThrow("disk full");
+    await expect(promise).rejects.toThrow("Sign in to confirm you're not a bot");
+    expect(spawn).toHaveBeenCalledTimes(2); // info fetch + exactly one download attempt, no retry
     expect(fs.writeFileSync).toHaveBeenCalled();
     const written = vi.mocked(fs.writeFileSync).mock.calls.at(-1)![1] as string;
-    expect(written).toContain("ERROR: disk full");
+    expect(written).toContain("ERROR: ERROR: Sign in to confirm you're not a bot");
+  });
+
+  describe("retry on transient failure", () => {
+    it("retries once and succeeds on the second attempt, emitting a retry progress message", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      try {
+        const infoChild = createFakeChild();
+        const downloadChild1 = createFakeChild();
+        const downloadChild2 = createFakeChild();
+        mockNextSpawn(infoChild);
+        mockNextSpawn(downloadChild1);
+        mockNextSpawn(downloadChild2);
+
+        const onProgress = vi.fn();
+        const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "320", onProgress);
+        await resolveSpawn(infoChild, JSON.stringify({ title: "My Song" }));
+
+        downloadChild1.stderr.emit("data", Buffer.from("HTTP Error 403: Forbidden"));
+        downloadChild1.emit("close", 1);
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(2000);
+
+        await resolveSpawn(downloadChild2, "");
+        const result = await promise;
+
+        expect(result.title).toBe("My Song");
+        expect(onProgress).toHaveBeenCalledWith(
+          expect.objectContaining({ stage: "downloading", message: "Erneuter Versuch (2/3)…", progress: null })
+        );
+        expect(spawn).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("exhausts all attempts on repeated transient failures and rejects with the last error", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      try {
+        const infoChild = createFakeChild();
+        const downloadChildren = [createFakeChild(), createFakeChild(), createFakeChild()];
+        mockNextSpawn(infoChild);
+        downloadChildren.forEach(mockNextSpawn);
+
+        const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "320", vi.fn());
+        await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
+
+        for (const [index, child] of downloadChildren.entries()) {
+          child.stderr.emit("data", Buffer.from("HTTP Error 403: Forbidden"));
+          child.emit("close", 1);
+          if (index < downloadChildren.length - 1) {
+            await Promise.resolve();
+            await vi.advanceTimersByTimeAsync(2000);
+          }
+        }
+
+        await expect(promise).rejects.toThrow("HTTP Error 403: Forbidden");
+        expect(spawn).toHaveBeenCalledTimes(1 + downloadChildren.length);
+        const written = vi.mocked(fs.writeFileSync).mock.calls.at(-1)![1] as string;
+        expect(written).toContain("attempt 1/3 failed");
+        expect(written).toContain("attempt 2/3 failed");
+        expect(written).toContain("ERROR: HTTP Error 403: Forbidden");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("evicts the oldest log files beyond MAX_LOG_FILES", async () => {

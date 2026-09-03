@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { errorMessage } from "./utils.js";
+import { errorMessage, isRetryableError } from "./utils.js";
 import { writeLog } from "./downloadLog.js";
 import { parseProgressLine, type ProgressUpdate } from "./progress.js";
 
@@ -217,6 +217,48 @@ function buildFormatArgs(format: MediaFormat, quality: string): string[] {
   ];
 }
 
+/** Download attempts per job: the original try plus this many retries on a transient failure. */
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 2000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Runs the yt-dlp download itself, retrying up to MAX_ATTEMPTS times on a transient failure (e.g.
+ * HTTP 403 / PO-token issues, per checkEnvironment()'s warning) with a fixed delay in between. The
+ * known-permanent "sign in required" gate is never retried, since it fails the same way every time.
+ */
+async function downloadWithRetry(
+  downloadArgs: string[],
+  format: MediaFormat,
+  title: string,
+  onProgress: (update: ProgressUpdate) => void,
+  log: (message: string) => void
+): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    onProgress(
+      attempt === 1
+        ? { stage: "downloading", message: `„${title}“ wird heruntergeladen…`, progress: 0 }
+        : { stage: "downloading", message: `Erneuter Versuch (${attempt}/${MAX_ATTEMPTS})…`, progress: null }
+    );
+
+    try {
+      await runYtDlp(downloadArgs, (line) => {
+        log(line);
+        const update = parseProgressLine(line, format);
+        if (update) onProgress(update);
+      });
+      return;
+    } catch (err) {
+      log(`attempt ${attempt}/${MAX_ATTEMPTS} failed: ${errorMessage(err)}`);
+      if (attempt >= MAX_ATTEMPTS || !isRetryableError(err)) throw err;
+      await delay(RETRY_DELAY_MS);
+    }
+  }
+}
+
 export async function downloadMedia(
   url: string,
   format: MediaFormat,
@@ -245,13 +287,7 @@ export async function downloadMedia(
     ];
     log(`yt-dlp args: ${downloadArgs.join(" ")}`);
 
-    onProgress({ stage: "downloading", message: `„${info.title}“ wird heruntergeladen…`, progress: 0 });
-
-    await runYtDlp(downloadArgs, (line) => {
-      log(line);
-      const update = parseProgressLine(line, format);
-      if (update) onProgress(update);
-    });
+    await downloadWithRetry(downloadArgs, format, info.title, onProgress, log);
 
     log("finished successfully");
     return {

@@ -15,3 +15,8 @@ export function userFacingErrorMessage(err: unknown, fallback?: string): string 
   }
   return raw;
 }
+
+/** Same permanent-failure check as userFacingErrorMessage() — used to decide whether a failed download attempt is worth retrying. */
+export function isRetryableError(err: unknown): boolean {
+  return !YOUTUBE_SIGNIN_REQUIRED_PATTERN.test(errorMessage(err));
+}
