@@ -23,6 +23,20 @@ pnpm monorepo with two workspaces:
 
 No lint or test tooling is configured in this repo.
 
+## Versioning
+
+Every commit bumps `app/app.json`'s `expo.version` and `expo.android.versionCode` by one patch
+level (default, regardless of commit type), and `app/android/app/build.gradle`
+(`versionName`/`versionCode`) in the same pass — the two must never drift, check both whenever
+either is touched. Commit subjects start with the resulting version, leftmost:
+`[vX.Y.Z] type: subject`. A GitHub Release is only ever cut at an `X.0` (minor) version — patch
+versions accumulate internally and never become their own release.
+
+## Android builds
+
+Claude builds release APKs itself via the Android Studio project's own Gradle wrapper
+(`app/android`, `gradlew assembleRelease`) — see the `build-apk` skill.
+
 ## Git commits
 
 Claude Code must never appear as the commit author in this repo. Every

@@ -52,16 +52,15 @@ zero new findings. `principles` covers this on its own.
 
 ## Step 3: Agent code review
 
-Invoke [[code-review]] with the unreleased range as its fixed point (`<last-tag>..HEAD`, or `git
-diff` against the working tree if Step 0 found uncommitted work not yet folded into a commit —
-same fallback as Step 1) and the plan file (if one exists for this feature) as the spec source.
-The `code-review` skill runs a two-axis Standards+Spec review and reports findings — it does not
-auto-fix (no `--fix`/`--level` flags exist on it). After it reports, apply the findings you judge
-worth fixing yourself (same restraint as Step 2's "alle" exception: skip anything whose fix is
-itself risky/nontrivial, log those to `deferred-quality-backlog` instead of forcing them through).
-This hunts correctness bugs, missing edge cases, and other issues that Steps 1–2 don't look for
-(neither hunts bugs; that's `code-review`'s specific job, run last so it sees the
-already-cleaned-up code).
+Invoke [[standards-spec-review]] with the unreleased range as its fixed point (`<last-tag>..HEAD`,
+or `git diff` against the working tree if Step 0 found uncommitted work not yet folded into a
+commit — same fallback as Step 1) and the plan file (if one exists for this feature) as the spec
+source. It runs a two-axis Standards+Spec review and reports findings — it does not auto-fix (no
+`--fix`/`--level` flags exist on it). After it reports, apply the findings you judge worth fixing
+yourself (same restraint as Step 2's "alle" exception: skip anything whose fix is itself
+risky/nontrivial, log those to `deferred-quality-backlog` instead of forcing them through). This
+hunts correctness bugs, missing edge cases, and other issues that Steps 1–2 don't look for (neither
+hunts bugs; that's this step's specific job, run last so it sees the already-cleaned-up code).
 
 ## Step 4: Safety net + compile check
 
@@ -79,19 +78,18 @@ CLAUDE.md) — do not leave review fixes uncommitted going into the build step.
 
 ## Step 5: Build a release APK for local testing — hard gate
 
-1. Decide the version bump with the user if not already obvious from the shipped commits (feat →
-   minor, fix → patch — see the project's SemVer philosophy in memory). Bump **both**
-   `app/app.json` (`expo.version` + `expo.android.versionCode`) **and**
-   `app/android/app/build.gradle` (`versionName` + `versionCode`) — the build.gradle copy is
-   git-ignored and invisible to `git status`, easy to forget (see
-   `contentdownloader-android-build-setup` memory).
-2. `cd app/android && ./gradlew assembleRelease` (always the release variant, run it yourself —
-   standing permission per project memory, no need to ask first).
-3. Copy the resulting APK to `E:\Drive\ContentDownloader\ContentDownloader-v{version}-RELEASE-DEBUG-{date}.apk`
-   (see `contentdownloader-android-build-setup` memory for the exact naming/delivery convention).
-4. Commit the version bump locally (its own small `chore:` commit, same author flag as above) —
-   **don't push yet.**
-5. Tell the user the APK is ready to test and **stop here**. Do not push to `main`'s remote, do
+1. Decide the version bump with the user: this is a release cut, so it always targets the next
+   `X.0` (minor) regardless of what the internal patch counter currently reads — see
+   `contentdownloader-versioning-convention` memory. Bump **both** `app/app.json`
+   (`expo.version` + `expo.android.versionCode`) **and** `app/android/app/build.gradle`
+   (`versionName` + `versionCode`), and give the bump commit's subject the
+   `[vX.Y.Z] chore: ...` title format per that same convention.
+2. Commit the version bump locally (its own small commit, same `--author` flag as every commit in
+   this project) — **don't push yet.**
+3. Invoke [[build-apk]] to build and deliver the release APK — it handles the
+   `gradlew assembleRelease` build, the version-file consistency check, and the Drive naming
+   convention; don't reimplement any of that here.
+4. Tell the user the APK is ready to test and **stop here**. Do not push to `main`'s remote, do
    not cut a release, until the user explicitly confirms the local test passed (e.g. "passt",
    "funktioniert", "gut"). A build succeeding is not the same as the user confirming it — wait for
    the actual confirmation message, same as every APK build earlier in this project's history.
@@ -119,12 +117,11 @@ confirmed.
   the one demonstrated-harm exception `principles` itself would normally ask about (skip + report
   it instead, see Step 2).
 - **Token efficiency (confirmed 2026-08-20):** don't add a separate `utils-audit` step —
-  `principles` already covers it internally (see Step 2). Keep `code-review` at `high`, not
-  `--ultra`/cloud, unless the user asks for that tier on a specific run. Don't re-run a step that
-  already produced a clean result earlier in the same pipeline attempt just to "be sure."
+  `principles` already covers it internally (see Step 2). Don't re-run a step that already
+  produced a clean result earlier in the same pipeline attempt just to "be sure."
 - Reuse the skills that already exist for each piece ([[simplify]], [[principles]],
-  [[code-review]], [[hide-claude]], [[smart-commit]]) instead of reimplementing their logic
-  inline here.
+  [[standards-spec-review]], [[hide-claude]], [[smart-commit]], [[build-apk]]) instead of
+  reimplementing their logic inline here.
 - Follow every existing ContentDownloader-project convention found in memory (version-bump-both-
   files, Drive delivery naming, `--author` flag) rather than improvising a new one — this skill is
   glue, not a new source of truth.
