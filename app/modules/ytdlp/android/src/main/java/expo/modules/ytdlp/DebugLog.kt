@@ -23,9 +23,11 @@ object DebugLog {
         if (deviceInfoLogged) return
         deviceInfoLogged = true
         val appContext = context.applicationContext
-        val versionName = runCatching {
+        val versionName = try {
             appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
-        }.getOrNull()
+        } catch (error: Throwable) {
+            null
+        }
         add(
             "device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} " +
                 "(API ${Build.VERSION.SDK_INT}), ABI ${Build.SUPPORTED_ABIS.firstOrNull()}, app $versionName"

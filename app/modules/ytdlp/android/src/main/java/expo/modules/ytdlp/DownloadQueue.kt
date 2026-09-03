@@ -5,6 +5,7 @@ import android.util.Log
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import com.yausername.youtubedl_android.YoutubeDLResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,22 +46,24 @@ private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
 /** yt-dlp's phrasing for YouTube's "Sign in to confirm you're not a bot" gate. */
 private val SIGN_IN_GATE_PATTERN = Regex("sign in to confirm you.{1,2}re not a bot", RegexOption.IGNORE_CASE)
 
-private fun nonEmptyTrimmedLines(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+internal fun nonEmptyTrimmedLines(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
 
 /** yt-dlp's key for a flat-playlist entry's playlist title (falls back to the older "playlist" key). */
-private fun JSONObject.playlistTitle(): String? =
+internal fun JSONObject.playlistTitle(): String? =
     optString("playlist_title").takeIf(String::isNotBlank) ?: optString("playlist").takeIf(String::isNotBlank)
 
 /** Parses one JSON object per non-blank output line, skipping any line that isn't valid JSON. */
-private fun parsePlaylistJsonLines(output: String): List<JSONObject> =
+internal fun parsePlaylistJsonLines(output: String): List<JSONObject> =
     nonEmptyTrimmedLines(output).mapNotNull { runCatching { JSONObject(it) }.getOrNull() }
 
 /** Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. */
-private fun toEntryMap(entry: JSONObject): Map<String, Any?> {
+internal fun toEntryMap(entry: JSONObject): Map<String, Any?> {
     val id = entry.optString("id", "")
     val thumbnails = entry.optJSONArray("thumbnails")
-    val thumbnail = thumbnails?.takeIf { it.length() > 0 }
-        ?.getJSONObject(thumbnails.length() - 1)?.optString("url")
+    // getJSONObject() throws (never returns null) on a bad index, and optString(String) always
+    // returns a non-null string (defaulting to "") — no further null-checks are needed on either
+    // once thumbnails is confirmed non-empty.
+    val thumbnail = thumbnails?.takeIf { it.length() > 0 }?.let { it.getJSONObject(it.length() - 1).optString("url")!! }
         ?: id.takeIf(String::isNotEmpty)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
     return mapOf(
         "id" to id,
@@ -71,13 +74,56 @@ private fun toEntryMap(entry: JSONObject): Map<String, Any?> {
     )
 }
 
-/** Mirrors isValidYoutubeUrl() in server/src/validate.ts. */
-private fun isValidYoutubeUrl(url: String): Boolean {
-    val uri = try {
-        android.net.Uri.parse(url)
-    } catch (error: Throwable) {
-        return false
+/**
+ * Seam over [YoutubeDL]'s singleton so [DownloadQueue] can be tested against a fake instead of the
+ * real native binary. [RealYtdlpEngine] delegates 1:1 to the SDK and carries no logic of its own.
+ */
+interface YtdlpEngine {
+    fun init(context: Context)
+    fun version(context: Context): String?
+    fun updateYoutubeDL(context: Context, channel: YoutubeDL.UpdateChannel)
+    fun execute(
+        request: YoutubeDLRequest,
+        processId: String,
+        redirectStderr: Boolean,
+        callback: ((progress: Float, etaInSeconds: Long, line: String) -> Unit)?
+    ): YoutubeDLResponse
+    fun destroyProcessById(id: String)
+}
+
+class RealYtdlpEngine : YtdlpEngine {
+    override fun init(context: Context) = YoutubeDL.getInstance().init(context)
+    override fun version(context: Context): String? = YoutubeDL.getInstance().version(context)
+    override fun updateYoutubeDL(context: Context, channel: YoutubeDL.UpdateChannel) {
+        YoutubeDL.getInstance().updateYoutubeDL(context, channel)
     }
+    override fun execute(
+        request: YoutubeDLRequest,
+        processId: String,
+        redirectStderr: Boolean,
+        callback: ((progress: Float, etaInSeconds: Long, line: String) -> Unit)?
+    ): YoutubeDLResponse = YoutubeDL.getInstance().execute(request, processId, redirectStderr, callback)
+    override fun destroyProcessById(id: String) {
+        YoutubeDL.getInstance().destroyProcessById(id)
+    }
+}
+
+/** Same seam as [YtdlpEngine], for [FFmpeg]'s singleton. */
+interface FfmpegEngine {
+    fun init(context: Context)
+}
+
+class RealFfmpegEngine : FfmpegEngine {
+    override fun init(context: Context) = FFmpeg.getInstance().init(context)
+}
+
+/**
+ * Mirrors isValidYoutubeUrl() in server/src/validate.ts. Android's Uri.parse() never throws
+ * for a String argument (it has no real validation, unlike java.net.URI) — there is no
+ * malformed input to catch here.
+ */
+internal fun isValidYoutubeUrl(url: String): Boolean {
+    val uri = android.net.Uri.parse(url)
     val scheme = uri.scheme?.lowercase()
     if (scheme != "http" && scheme != "https") return false
     return YOUTUBE_HOSTS.contains(uri.host?.lowercase())
@@ -88,6 +134,9 @@ private fun isValidYoutubeUrl(url: String): Boolean {
  * kept alive by [DownloadService] while work is pending, so downloads survive leaving the app.
  */
 object DownloadQueue {
+    internal var engine: YtdlpEngine = RealYtdlpEngine()
+    internal var ffmpeg: FfmpegEngine = RealFfmpegEngine()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val slots = Semaphore(MAX_PARALLEL)
     private val setupMutex = Mutex()
@@ -147,15 +196,14 @@ object DownloadQueue {
             if (setupPhase == SetupPhase.READY) return
             try {
                 setSetup(SetupPhase.PREPARING, "Bereite yt-dlp vor…")
-                YoutubeDL.getInstance().init(appContext)
-                FFmpeg.getInstance().init(appContext)
-                ytdlpVersion = YoutubeDL.getInstance().version(appContext)
+                engine.init(appContext)
+                ffmpeg.init(appContext)
+                ytdlpVersion = engine.version(appContext)
 
                 setSetup(SetupPhase.UPDATING, "Suche nach yt-dlp-Update…")
                 try {
-                    YoutubeDL.getInstance()
-                        .updateYoutubeDL(appContext, YoutubeDL.UpdateChannel.NIGHTLY)
-                    ytdlpVersion = YoutubeDL.getInstance().version(appContext)
+                    engine.updateYoutubeDL(appContext, YoutubeDL.UpdateChannel.NIGHTLY)
+                    ytdlpVersion = engine.version(appContext)
                 } catch (updateError: Throwable) {
                     // Offline or GitHub unreachable: the bundled binary still works.
                     Log.w(TAG, "yt-dlp update skipped", updateError)
@@ -215,7 +263,7 @@ object DownloadQueue {
             .addOption("--dump-json")
             .addOption("--no-warnings")
             .addOption("--playlist-items", "$start-${start + count - 1}")
-        val output = YoutubeDL.getInstance().execute(request, UUID.randomUUID().toString(), false, null).out
+        val output = engine.execute(request, UUID.randomUUID().toString(), false, null).out
         val parsed = parsePlaylistJsonLines(output)
 
         val title = parsed.firstOrNull()?.playlistTitle() ?: "Playlist"
@@ -234,7 +282,7 @@ object DownloadQueue {
         job.updatedAt = now
 
         // Kills the running yt-dlp process; a queued job is stopped by cancelling its coroutine.
-        scope.launch { runCatching { YoutubeDL.getInstance().destroyProcessById(id) } }
+        scope.launch { runCatching { engine.destroyProcessById(id) } }
         synchronized(lock) {
             coroutines.remove(id)?.cancel()
             // Removed immediately rather than left sitting in the list until "Fertige entfernen".
@@ -258,7 +306,7 @@ object DownloadQueue {
         touch()
     }
 
-    private suspend fun runJob(context: Context, job: DownloadJob) {
+    internal suspend fun runJob(context: Context, job: DownloadJob) {
         if (job.phase == JobPhase.CANCELLED) return
         try {
             if (!isValidYoutubeUrl(job.url)) {
@@ -301,9 +349,9 @@ object DownloadQueue {
      * and records the resulting path on the job. Throws on failure — the caller (runJob) handles
      * cancellation/error routing.
      */
-    private fun downloadAndFinalize(job: DownloadJob, outputDir: File, ext: String) {
+    internal fun downloadAndFinalize(job: DownloadJob, outputDir: File, ext: String) {
         val request = buildRequest(job, File(outputDir, "${job.id}.%(ext)s").absolutePath)
-        YoutubeDL.getInstance().execute(request, job.id, false) { progress, eta, line ->
+        engine.execute(request, job.id, false) { progress, eta, line ->
             onOutput(job, progress, eta, line)
         }
 
@@ -322,23 +370,23 @@ object DownloadQueue {
      * The --print option implies --simulate, so this only resolves the name. Much cheaper than
      * dumping the full metadata JSON, and cancellable because it runs under the process id of the job.
      */
-    private fun fetchTitle(job: DownloadJob): String {
+    internal fun fetchTitle(job: DownloadJob): String {
         val request = YoutubeDLRequest(job.url)
             .addOption("--no-playlist")
             .addOption("--no-warnings")
             .addOption("--print", "title")
-        val output = YoutubeDL.getInstance().execute(request, job.id, false, null).out
+        val output = engine.execute(request, job.id, false, null).out
         return nonEmptyTrimmedLines(output).lastOrNull() ?: job.url
     }
 
     /** Mirrors sanitizeFilename() in server/src/index.ts and app/App.tsx. */
-    private fun sanitizeFilename(name: String): String {
+    internal fun sanitizeFilename(name: String): String {
         val cleaned = name.replace(ILLEGAL_FILENAME_CHARS, "").trim()
         return cleaned.ifEmpty { "download" }
     }
 
     /** Renames the yt-dlp output (named by job id) to a human filename, deduping on collision. */
-    private fun renameToTitledFile(source: File, title: String, ext: String): File {
+    internal fun renameToTitledFile(source: File, title: String, ext: String): File {
         val base = sanitizeFilename(title)
         var candidate = File(source.parentFile, "$base.$ext")
         var suffix = 2
@@ -350,7 +398,7 @@ object DownloadQueue {
     }
 
     /** Mirrors buildFormatArgs() in server/src/youtube.ts so app and web behave identically. */
-    private fun buildRequest(job: DownloadJob, outputTemplate: String): YoutubeDLRequest {
+    internal fun buildRequest(job: DownloadJob, outputTemplate: String): YoutubeDLRequest {
         val request = YoutubeDLRequest(job.url)
         if (job.format == "audio") {
             request.addOption("-f", "bestaudio/best")
@@ -371,7 +419,7 @@ object DownloadQueue {
         return request
     }
 
-    private fun onOutput(job: DownloadJob, progress: Float, eta: Long, line: String) {
+    internal fun onOutput(job: DownloadJob, progress: Float, eta: Long, line: String) {
         if (job.phase.isFinished) return
 
         val trimmed = line.trim()
@@ -391,21 +439,21 @@ object DownloadQueue {
         touch()
     }
 
-    private fun advance(job: DownloadJob, phase: JobPhase) {
+    internal fun advance(job: DownloadJob, phase: JobPhase) {
         job.phase = phase
         job.updatedAt = System.currentTimeMillis()
         DebugLog.add("job ${job.id} -> ${phase.jsName}")
         touch()
     }
 
-    private fun setSetup(phase: SetupPhase, message: String) {
+    internal fun setSetup(phase: SetupPhase, message: String) {
         setupPhase = phase
         setupMessage = message
         DebugLog.add("setup -> ${phase.jsName}: $message")
         touch()
     }
 
-    private fun touch() {
+    internal fun touch() {
         _revision.value = _revision.value + 1
     }
 
@@ -417,7 +465,7 @@ object DownloadQueue {
      * DebugLog.addError() separately (called with the raw Throwable before this runs), so nothing
      * is lost for debugging.
      */
-    private fun describeError(error: Throwable): String {
+    internal fun describeError(error: Throwable): String {
         val raw = describeErrorRaw(error)
         return if (SIGN_IN_GATE_PATTERN.containsMatchIn(raw)) {
             "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
@@ -427,7 +475,7 @@ object DownloadQueue {
     }
 
     /** yt-dlp errors carry the whole stderr; the last real line is the part a user can act on. */
-    private fun describeErrorRaw(error: Throwable): String {
+    internal fun describeErrorRaw(error: Throwable): String {
         val raw = error.message?.trim().orEmpty()
         if (raw.isEmpty()) {
             // Wrapper exceptions (ExceptionInInitializerError, InvocationTargetException, ...)
@@ -442,9 +490,8 @@ object DownloadQueue {
             }
             return error::class.java.simpleName
         }
-        return nonEmptyTrimmedLines(raw)
-            .lastOrNull()
-            ?.removePrefix("ERROR: ")
-            ?: raw
+        // raw is already non-empty (checked above) and whole-string-trimmed, so it has at least
+        // one non-whitespace character — nonEmptyTrimmedLines(raw) can never be empty here.
+        return nonEmptyTrimmedLines(raw).last().removePrefix("ERROR: ")
     }
 }
