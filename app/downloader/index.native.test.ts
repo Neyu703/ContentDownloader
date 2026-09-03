@@ -1,7 +1,8 @@
 import { AppState } from "react-native";
 import type { NativeJob, NativeState } from "../modules/ytdlp";
 import { createNativeYtdlpMock } from "../__mocks__/nativeYtdlp";
-import type { Downloader, JobState } from "./types";
+import type { JobState } from "./types";
+import { freshDownloaderFrom } from "./testUtils";
 
 const mockYtdlp = createNativeYtdlpMock();
 jest.mock("../modules/ytdlp", () => ({
@@ -9,12 +10,8 @@ jest.mock("../modules/ytdlp", () => ({
   default: mockYtdlp,
 }));
 
-function freshDownloader(): Downloader {
-  let downloader!: Downloader;
-  jest.isolateModules(() => {
-    downloader = require("./index.native").downloader;
-  });
-  return downloader;
+function freshDownloader() {
+  return freshDownloaderFrom("./index.native");
 }
 
 function flushPromises() {

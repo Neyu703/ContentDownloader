@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 vi.mock("./youtube.js", async () => {
@@ -196,6 +196,10 @@ describe("GET /api/job/:jobId", () => {
 });
 
 describe("GET /api/download/:id", () => {
+  beforeEach(() => {
+    fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
+  });
+
   it("400s on a malformed id", async () => {
     const res = await request(app).get("/api/download/not-a-uuid");
     expect(res.status).toBe(400);
@@ -209,7 +213,6 @@ describe("GET /api/download/:id", () => {
   it("streams the file, sanitizes the ?name= query param, and deletes it afterward", async () => {
     const id = "11111111-1111-1111-1111-111111111111";
     const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
-    fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
     fs.writeFileSync(filePath, "fake audio content");
 
     const res = await request(app).get(`/api/download/${id}`).query({ name: 'My<>Song' });
@@ -221,7 +224,6 @@ describe("GET /api/download/:id", () => {
   it("falls back to 'audio' when ?name= strips down to nothing but illegal characters", async () => {
     const id = "33333333-3333-3333-3333-333333333333";
     const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
-    fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
     fs.writeFileSync(filePath, "fake audio content");
 
     const res = await request(app).get(`/api/download/${id}`).query({ name: "<<<>>>" });
@@ -233,7 +235,6 @@ describe("GET /api/download/:id", () => {
   it("falls back to 'download' as the filename when ?name= is omitted", async () => {
     const id = "22222222-2222-2222-2222-222222222222";
     const filePath = path.join(DOWNLOADS_DIR, `${id}.mp4`);
-    fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
     fs.writeFileSync(filePath, "fake video content");
 
     const res = await request(app).get(`/api/download/${id}`);

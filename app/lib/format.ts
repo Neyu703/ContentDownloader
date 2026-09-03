@@ -1,4 +1,8 @@
-import type { JobPhase, MediaFormat, PlaylistInfo } from "../downloader/types";
+import type { JobPhase, MediaFormat, PlaylistInfo, SetupPhase } from "../downloader/types";
+
+// A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
+// a single video that happens to be playing within one.
+export const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
 export function formatMB(mb: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
@@ -34,6 +38,23 @@ export function sanitizeFilename(name: string): string {
 
 export function isFinishedPhase(phase: JobPhase): boolean {
   return phase === "done" || phase === "error" || phase === "cancelled";
+}
+
+/** Setup phases worth showing a status line for (idle/ready render nothing). */
+export function isSetupMessagePhase(phase: SetupPhase): boolean {
+  return phase === "preparing" || phase === "updating" || phase === "failed";
+}
+
+export function hasPositiveDuration(duration: number | null | undefined): duration is number {
+  return duration != null && duration > 0;
+}
+
+export function mimeTypeForExt(ext: "mp3" | "mp4" | null | undefined): string {
+  return ext === "mp4" ? "video/mp4" : "audio/mpeg";
+}
+
+export function toFileUri(path: string): string {
+  return path.startsWith("file://") ? path : `file://${path}`;
 }
 
 export function pluralize(count: number, singular: string, plural: string): string {

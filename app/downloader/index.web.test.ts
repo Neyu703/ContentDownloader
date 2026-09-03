@@ -1,11 +1,8 @@
 import type { Downloader } from "./types";
+import { freshDownloaderFrom } from "./testUtils";
 
-function freshDownloader(): Downloader {
-  let downloader!: Downloader;
-  jest.isolateModules(() => {
-    downloader = require("./index.web").downloader;
-  });
-  return downloader;
+function freshDownloader() {
+  return freshDownloaderFrom("./index.web");
 }
 
 function jsonResponse(body: unknown, ok = true) {

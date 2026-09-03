@@ -25,17 +25,17 @@ import { Dropdown } from "./components/Dropdown";
 import { JobCard } from "./components/JobCard";
 import { PlaylistPickerModal } from "./components/PlaylistPickerModal";
 import { usePreview } from "./hooks/usePreview";
-import { usePlaylistPicker } from "./hooks/usePlaylistPicker";
+import { usePlaylistPicker, type SubmitFn } from "./hooks/usePlaylistPicker";
 import {
   formatDuration,
   isFinishedPhase,
+  isSetupMessagePhase,
+  mimeTypeForExt,
+  PLAYLIST_URL_PATTERN,
   sanitizeFilename,
+  toFileUri,
 } from "./lib/format";
 import { styles } from "./styles";
-
-// A playlist link always carries a "list=" query param, whether it's a standalone playlist URL or
-// a single video that happens to be playing within one.
-const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
 // Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
 const WIDE_LAYOUT_BREAKPOINT = 700;
@@ -218,10 +218,10 @@ export default function App() {
         window.location.href = job.result;
         return;
       }
-      const fileUri = job.result.startsWith("file://") ? job.result : `file://${job.result}`;
+      const fileUri = toFileUri(job.result);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
-          mimeType: job.ext === "mp4" ? "video/mp4" : "audio/mpeg",
+          mimeType: mimeTypeForExt(job.ext),
           dialogTitle: sanitizeFilename(job.title ?? "download"),
         });
       }
@@ -229,6 +229,8 @@ export default function App() {
       setSharingId(null);
     }
   }
+
+  const isFormBusy = isSubmitting || isPlaylistLoading;
 
   const formSection = (
     <>
@@ -277,9 +279,9 @@ export default function App() {
       </View>
 
       <Pressable
-        style={[styles.button, (isSubmitting || isPlaylistLoading) && styles.buttonDisabled]}
+        style={[styles.button, isFormBusy && styles.buttonDisabled]}
         onPress={handleConvert}
-        disabled={isSubmitting || isPlaylistLoading}
+        disabled={isFormBusy}
       >
         <Text style={styles.buttonText}>
           {isPlaylistLoading ? "Lädt Playlist…" : isSubmitting ? "Wird gestartet…" : "Herunterladen"}
@@ -351,7 +353,7 @@ export default function App() {
         <Text style={styles.title}>YouTube Downloader</Text>
         <Text style={styles.subtitle}>Lädt YouTube-Videos als MP3 oder MP4 in der gewünschten Qualität herunter</Text>
 
-        {(setup.phase === "preparing" || setup.phase === "updating" || setup.phase === "failed") && (
+        {isSetupMessagePhase(setup.phase) && (
           <Text style={[styles.searchMessage, setup.phase === "failed" && styles.errorText]}>{setup.message}</Text>
         )}
 

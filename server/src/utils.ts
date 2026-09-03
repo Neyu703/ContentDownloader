@@ -8,15 +8,18 @@ export function errorMessage(err: unknown, fallback?: string): string {
 // to the app; the technical message still goes into the job log file for debugging.
 const YOUTUBE_SIGNIN_REQUIRED_PATTERN = /sign in to confirm you.{1,2}re not a bot/i;
 
+function isSignInGateError(message: string): boolean {
+  return YOUTUBE_SIGNIN_REQUIRED_PATTERN.test(message);
+}
+
 export function userFacingErrorMessage(err: unknown, fallback?: string): string {
   const raw = errorMessage(err, fallback);
-  if (YOUTUBE_SIGNIN_REQUIRED_PATTERN.test(raw)) {
-    return "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden.";
-  }
-  return raw;
+  return isSignInGateError(raw)
+    ? "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden."
+    : raw;
 }
 
 /** Same permanent-failure check as userFacingErrorMessage() — used to decide whether a failed download attempt is worth retrying. */
 export function isRetryableError(err: unknown): boolean {
-  return !YOUTUBE_SIGNIN_REQUIRED_PATTERN.test(errorMessage(err));
+  return !isSignInGateError(errorMessage(err));
 }

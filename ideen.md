@@ -283,10 +283,12 @@ bieten und was davon für ContentDownloader übertragbar ist:
 2. [x] [4-2] ID3-Tags/Cover-Art einbetten (ein Flag in `buildFormatArgs`)
 3. [x] [7-3] Enter-zum-Absenden / [x] [7-6] Breakpoint-Layout für Tablet/Desktop (kleine, gezielte
    Fixes für die drei tatsächlich genutzten Geräte)
-4. [ ] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
-5. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
+4. [x] [1-2] Automatischer Retry bei transienten Fehlern (bis zu 3 Versuche, server- und
+   android-seitig gespiegelt)
+5. [ ] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
+6. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
    da er den Produktnamen einlöst
-6. [x] [1-7] Playlist-Download
+7. [x] [1-7] Playlist-Download
 
 **ID-Schema:** `<Abschnitt>-<Nummer>`, z.B. `1-1` = erste Idee in Abschnitt 1.
 

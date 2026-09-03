@@ -94,7 +94,7 @@ export async function updateYtDlp(): Promise<void> {
     const output = await runYtDlp(["--update-to", "nightly"]);
     console.log(output.trim());
   } catch (err) {
-    console.warn("yt-dlp Selbst-Update fehlgeschlagen:", err instanceof Error ? err.message : err);
+    console.warn("yt-dlp Selbst-Update fehlgeschlagen:", errorMessage(err));
   }
 }
 
@@ -115,7 +115,7 @@ export async function checkEnvironment(): Promise<void> {
     const version = await runYtDlp(["--version"]);
     console.log(`yt-dlp Version: ${version.trim()}`);
   } catch (err) {
-    console.warn("WARNUNG: yt-dlp nicht erreichbar:", err instanceof Error ? err.message : err);
+    console.warn("WARNUNG: yt-dlp nicht erreichbar:", errorMessage(err));
   }
 
   if (!(await checkFfmpeg())) {
@@ -217,7 +217,7 @@ function buildFormatArgs(format: MediaFormat, quality: string): string[] {
   ];
 }
 
-/** Download attempts per job: the original try plus this many retries on a transient failure. */
+/** Total download attempts per job (including the first try) before a transient failure gives up. */
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 2000;
 

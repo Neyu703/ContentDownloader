@@ -1,6 +1,6 @@
 import { Image, Pressable, Text, View } from "react-native";
 import type { PlaylistEntry } from "../downloader/types";
-import { formatDuration } from "../lib/format";
+import { formatDuration, hasPositiveDuration } from "../lib/format";
 import { styles } from "../styles";
 
 export function PlaylistEntryRow({
@@ -24,7 +24,7 @@ export function PlaylistEntryRow({
         <Text style={styles.playlistEntryTitle} numberOfLines={2}>
           {entry.title}
         </Text>
-        {entry.duration != null && entry.duration > 0 && (
+        {hasPositiveDuration(entry.duration) && (
           <Text style={styles.previewMeta}>{formatDuration(entry.duration)}</Text>
         )}
       </View>
