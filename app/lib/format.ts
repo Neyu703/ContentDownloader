@@ -4,6 +4,14 @@ import type { JobPhase, MediaFormat, PlaylistInfo, SetupPhase } from "../downloa
 // a single video that happens to be playing within one.
 export const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
+/** Splits multi-line pasted input (batch-queue) into individual trimmed, non-empty URL candidates. */
+export function parseUrlLines(input: string): string[] {
+  return input
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export function formatMB(mb: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }

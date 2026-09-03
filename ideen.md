@@ -24,7 +24,7 @@ nach Aufwand sortiert, klein → groß.
 - [x] **[1-2] Automatischer Retry bei transienten Fehlern** — z.B. HTTP-403/PO-Token-Fehler (im Code
   bereits als bekanntes Risiko dokumentiert, siehe `checkEnvironment()`), automatisch 1–2×
   erneut versuchen, bevor der Job als "Fehlgeschlagen" markiert wird. **Aufwand: klein**.
-- [ ] **[1-3] Mehrere Links gleichzeitig einfügen (Batch-Queue)** — Textarea statt Single-Line-Input, ein
+- [x] **[1-3] Mehrere Links gleichzeitig einfügen (Batch-Queue)** — Textarea statt Single-Line-Input, ein
   Link pro Zeile, alle als eigene Jobs in die bestehende `jobs[]`-Liste einreihen. Die
   Job-Infrastruktur (Queue, Fortschritt pro Job) existiert bereits vollständig dafür.
   **Aufwand: klein–mittel**.
@@ -285,7 +285,7 @@ bieten und was davon für ContentDownloader übertragbar ist:
    Fixes für die drei tatsächlich genutzten Geräte)
 4. [x] [1-2] Automatischer Retry bei transienten Fehlern (bis zu 3 Versuche, server- und
    android-seitig gespiegelt)
-5. [ ] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
+5. [x] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
 6. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
    da er den Produktnamen einlöst
 7. [x] [1-7] Playlist-Download

@@ -31,6 +31,7 @@ import {
   isFinishedPhase,
   isSetupMessagePhase,
   mimeTypeForExt,
+  parseUrlLines,
   PLAYLIST_URL_PATTERN,
   sanitizeFilename,
   toFileUri,
@@ -161,9 +162,17 @@ export default function App() {
   }
 
   async function handleConvert() {
-    const targetUrl = url.trim();
-    if (!targetUrl || isSubmitting || isPlaylistLoading) return;
+    const lines = parseUrlLines(url);
+    if (lines.length === 0 || isSubmitting || isPlaylistLoading) return;
 
+    if (lines.length === 1) {
+      await handleSingleConvert(lines[0]);
+      return;
+    }
+    await handleBatchConvert(lines);
+  }
+
+  async function handleSingleConvert(targetUrl: string) {
     if (PLAYLIST_URL_PATTERN.test(targetUrl)) {
       await startPlaylistFetch(targetUrl);
       return;
@@ -181,6 +190,32 @@ export default function App() {
       getPendingInfo(targetUrl).then((info) => {
         if (info) downloader.updateJobPreview!(jobId, info);
       });
+    }
+  }
+
+  /** Multiple lines pasted at once — one job per non-playlist line, no per-job preview lookup. */
+  async function handleBatchConvert(lines: string[]) {
+    setUrl("");
+    const playlistLines = lines.filter((line) => PLAYLIST_URL_PATTERN.test(line));
+    const videoLines = lines.filter((line) => !PLAYLIST_URL_PATTERN.test(line));
+
+    if (videoLines.length === 0) {
+      setSubmitError("Keine gültigen Links gefunden.");
+      return;
+    }
+
+    // Sequential, not Promise.all: keeps job cards appearing in input order and avoids firing a
+    // burst of simultaneous yt-dlp processes (same reasoning as confirmPlaylistDownload()).
+    for (const targetUrl of videoLines) {
+      await submit(targetUrl, format, quality, null);
+    }
+
+    // Set after the loop: each submit() call clears submitError at its start, so setting this
+    // beforehand would just get wiped out by the first job.
+    if (playlistLines.length > 0) {
+      setSubmitError(
+        `${playlistLines.length} Playlist-Link${playlistLines.length > 1 ? "s" : ""} übersprungen — bitte einzeln einfügen.`
+      );
     }
   }
 
@@ -243,8 +278,7 @@ export default function App() {
           onChangeText={setUrl}
           autoCapitalize="none"
           autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={handleConvert}
+          multiline
         />
         <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel="Einfügen">
           <Text style={styles.pasteButtonIcon}>📋</Text>
