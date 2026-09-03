@@ -25,6 +25,7 @@ export interface NativeJob {
   groupTitle: string | null;
   phase: JobPhase;
   title: string | null;
+  thumbnail: string | null;
   progress: number | null;
   etaSeconds: number | null;
   lastLine: string;

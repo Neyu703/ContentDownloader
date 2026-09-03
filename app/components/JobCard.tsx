@@ -51,6 +51,21 @@ export function JobCard({
       : null;
   const etaLabel = job.etaSeconds != null && job.etaSeconds > 0 ? formatSecondsShort(job.etaSeconds) : null;
   const extLabel = (job.ext ?? "").toUpperCase();
+  // "Läuft seit" alone isn't informative enough to justify showing the details toggle — only count
+  // it once there's at least one real data point (progress, size, speed, ETA, or a raw yt-dlp line).
+  const hasDebugInfo =
+    job.progress != null ||
+    job.totalMB != null ||
+    estimatedFinalMB != null ||
+    job.speedMBs != null ||
+    etaLabel != null ||
+    job.lastLine !== "";
+  const statusLabel = (
+    <Text style={styles.statusText}>
+      {PHASE_LABELS[job.phase]}
+      {isStalled ? " · läuft weiter, YouTube antwortet gerade langsam" : ""}
+    </Text>
+  );
 
   useEffect(() => {
     Animated.timing(detailsAnim, {
@@ -115,30 +130,31 @@ export function JobCard({
         <Text style={styles.statusText}>{PHASE_LABELS[job.phase]}</Text>
       ) : (
         <>
-          <Pressable
-            style={styles.statusRow}
-            onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
-            accessibilityLabel={isDetailsExpanded ? "Details einklappen" : "Details ausklappen"}
-          >
-            <Text style={styles.statusText}>
-              {PHASE_LABELS[job.phase]}
-              {isStalled ? " · läuft weiter, YouTube antwortet gerade langsam" : ""}
-            </Text>
-            <View style={styles.collapseButton}>
-              <Animated.Text
-                style={[
-                  styles.collapseChevron,
-                  {
-                    transform: [
-                      { rotate: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) },
-                    ],
-                  },
-                ]}
-              >
-                ▾
-              </Animated.Text>
-            </View>
-          </Pressable>
+          {hasDebugInfo ? (
+            <Pressable
+              style={styles.statusRow}
+              onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
+              accessibilityLabel={isDetailsExpanded ? "Details einklappen" : "Details ausklappen"}
+            >
+              {statusLabel}
+              <View style={styles.collapseButton}>
+                <Animated.Text
+                  style={[
+                    styles.collapseChevron,
+                    {
+                      transform: [
+                        { rotate: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: ["-90deg", "0deg"] }) },
+                      ],
+                    },
+                  ]}
+                >
+                  ▾
+                </Animated.Text>
+              </View>
+            </Pressable>
+          ) : (
+            <View style={styles.statusRow}>{statusLabel}</View>
+          )}
           <View style={styles.progressWrapper}>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
@@ -154,38 +170,40 @@ export function JobCard({
               </Animated.View>
             )}
           </View>
-          <Animated.View
-            style={{
-              height: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, debugBoxHeight] }),
-              marginTop: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }),
-              opacity: detailsAnim,
-              overflow: "hidden",
-            }}
-          >
-            <View
-              testID="job-debug-box"
-              onLayout={(e) => setDebugBoxHeight(e.nativeEvent.layout.height)}
-              style={styles.debugBox}
+          {hasDebugInfo && (
+            <Animated.View
+              style={{
+                height: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [0, debugBoxHeight] }),
+                marginTop: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }),
+                opacity: detailsAnim,
+                overflow: "hidden",
+              }}
             >
-              {job.progress != null && <Text style={styles.debugLine}>Fortschritt: {job.progress.toFixed(1)}%</Text>}
-              {job.totalMB != null && (
-                <Text style={styles.debugLine}>
-                  Heruntergeladen: {job.downloadedMB != null ? formatMB(job.downloadedMB) : "?"} / {formatMB(job.totalMB)}
-                </Text>
-              )}
-              {estimatedFinalMB != null && (
-                <Text style={styles.debugLine}>Geschätzte Endgröße: ~{formatMB(estimatedFinalMB)}</Text>
-              )}
-              {job.speedMBs != null && <Text style={styles.debugLine}>Geschwindigkeit: {job.speedMBs.toFixed(2)} MB/s</Text>}
-              {etaLabel && <Text style={styles.debugLine}>ETA: {etaLabel}</Text>}
-              <Text style={styles.debugLine}>Läuft seit: {formatElapsed(now - job.createdAt)}</Text>
-              {job.lastLine !== "" && (
-                <Text style={styles.debugLine} numberOfLines={1}>
-                  {job.lastLine}
-                </Text>
-              )}
-            </View>
-          </Animated.View>
+              <View
+                testID="job-debug-box"
+                onLayout={(e) => setDebugBoxHeight(e.nativeEvent.layout.height)}
+                style={styles.debugBox}
+              >
+                {job.progress != null && <Text style={styles.debugLine}>Fortschritt: {job.progress.toFixed(1)}%</Text>}
+                {job.totalMB != null && (
+                  <Text style={styles.debugLine}>
+                    Heruntergeladen: {job.downloadedMB != null ? formatMB(job.downloadedMB) : "?"} / {formatMB(job.totalMB)}
+                  </Text>
+                )}
+                {estimatedFinalMB != null && (
+                  <Text style={styles.debugLine}>Geschätzte Endgröße: ~{formatMB(estimatedFinalMB)}</Text>
+                )}
+                {job.speedMBs != null && <Text style={styles.debugLine}>Geschwindigkeit: {job.speedMBs.toFixed(2)} MB/s</Text>}
+                {etaLabel && <Text style={styles.debugLine}>ETA: {etaLabel}</Text>}
+                <Text style={styles.debugLine}>Läuft seit: {formatElapsed(now - job.createdAt)}</Text>
+                {job.lastLine !== "" && (
+                  <Text style={styles.debugLine} numberOfLines={1}>
+                    {job.lastLine}
+                  </Text>
+                )}
+              </View>
+            </Animated.View>
+          )}
         </>
       )}
 

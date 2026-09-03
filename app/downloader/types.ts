@@ -29,7 +29,7 @@ export interface JobState {
   speedMBs?: number;
   etaSeconds: number | null;
   lastLine: string;
-  /** Web only — carried over from the preview fetched before submit; native jobs never set this. */
+  /** Web: carried over from the preview fetched before submit. Native: resolved by the job itself once fetched. */
   thumbnail?: string | null;
   /** Local file path (native) or download URL (web) once phase is "done". */
   result: string | null;

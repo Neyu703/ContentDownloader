@@ -73,6 +73,9 @@ export function generateGroupId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// A video can legitimately appear more than once in the same YouTube playlist (re-added), so
+// entry ids aren't guaranteed unique — comparing selected.size against entries.length would
+// wrongly report "not all selected" whenever a duplicate id collapses the Set below the entry count.
 export function isAllPlaylistEntriesSelected(picker: { info: PlaylistInfo; selected: Set<string> }): boolean {
-  return picker.selected.size === picker.info.entries.length;
+  return picker.info.entries.every((entry) => picker.selected.has(entry.id));
 }
