@@ -1,0 +1,85 @@
+name: Release APK
+
+on:
+  workflow_dispatch: {}
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify app.json / build.gradle version match
+        run: |
+          APP_JSON_VERSION=$(node -pe "require('./app/app.json').expo.version")
+          APP_JSON_CODE=$(node -pe "require('./app/app.json').expo.android.versionCode")
+          GRADLE_VERSION=$(grep -oP 'versionName\s+"\K[^"]+' app/android/app/build.gradle)
+          GRADLE_CODE=$(grep -oP 'versionCode\s+\K[0-9]+' app/android/app/build.gradle)
+          if [ "$APP_JSON_VERSION" != "$GRADLE_VERSION" ] || [ "$APP_JSON_CODE" != "$GRADLE_CODE" ]; then
+            echo "::error::app.json and build.gradle version/versionCode mismatch"
+            exit 1
+          fi
+          echo "APP_VERSION=$GRADLE_VERSION" >> "$GITHUB_ENV"
+
+      - name: Write release keystore
+        working-directory: app/android
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/contentdownloader-release.jks
+          cat > keystore.properties <<EOF
+          storeFile=contentdownloader-release.jks
+          storePassword=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}
+          keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}
+          EOF
+
+      - run: chmod +x app/android/gradlew
+
+      - name: Build release APK
+        working-directory: app/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp app/android/app/build/outputs/apk/release/app-release.apk \
+             "dist/ContentDownloader-v${APP_VERSION}.apk"
+
+      - name: Upload workflow artifact (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ContentDownloader-v${{ env.APP_VERSION }}
+          path: dist/ContentDownloader-v${{ env.APP_VERSION }}.apk
+
+      - name: Attach APK to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "dist/ContentDownloader-v${{ env.APP_VERSION }}.apk" --clobber
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/android/keystore.properties app/android/app/contentdownloader-release.jks

@@ -35,7 +35,17 @@ versions accumulate internally and never become their own release.
 ## Android builds
 
 Claude builds release APKs itself via the Android Studio project's own Gradle wrapper
-(`app/android`, `gradlew assembleRelease`) — see the `build-apk` skill.
+(`app/android`, `gradlew assembleRelease`) — see the `build-apk` skill. These local builds are
+always debug-signed, for on-device testing.
+
+## CI / Release builds
+
+`.github/workflows/release-apk.yml` builds the official, release-signed APK on GitHub's own
+runners — triggers on `workflow_dispatch` (manual, from the Actions tab) and on `release:
+published` (attaches the APK to that release automatically). Needs four repo secrets:
+`RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`,
+`RELEASE_KEY_PASSWORD`. `build-apk` is the local debug-signed test-build path; this workflow is
+the only source of the real-signed release artifact.
 
 ## Git commits
 

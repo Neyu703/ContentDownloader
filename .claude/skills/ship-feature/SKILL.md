@@ -102,8 +102,12 @@ confirmed.
 ## Step 7: GitHub Release
 
 1. `git log v{previous}..HEAD --oneline` against the last release tag for the changelog.
-2. `gh release create v{version} <path-to-the-tested-apk>#ContentDownloader-v{version}.apk --title v{version} --notes "## Changes since v{previous}\n- ..."`
-   — reuse the exact APK already built and tested in Step 5, don't rebuild.
+2. `gh release create v{version} --title v{version} --notes "## Changes since v{previous}\n- ..."`
+   — no APK attached here. Publishing the release fires the `release-apk` GitHub Actions
+   workflow, which builds the real, release-signed APK from the exact same commit and attaches
+   it automatically a short while later. Don't attach the Step 5 test APK (debug-signed) — it
+   would only get clobbered by CI's upload moments after, and reusing that filename manually
+   invites a race with no benefit.
 
 ## Rules
 
