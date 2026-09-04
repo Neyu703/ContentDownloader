@@ -1,0 +1,58 @@
+name: Auto Pre-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Tag and pre-release each new patch commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || \
+             ! git merge-base --is-ancestor "$BEFORE" "$AFTER" 2>/dev/null; then
+            # New branch, or history was rewritten (force-push) — only the tip is safe to process.
+            COMMITS="$AFTER"
+          else
+            COMMITS=$(git rev-list --reverse "$BEFORE..$AFTER")
+          fi
+
+          for sha in $COMMITS; do
+            VERSION=$(git show "$sha:app/app.json" | jq -r '.expo.version // empty')
+            if [ -z "$VERSION" ]; then
+              echo "No app.json version at $sha, skipping"
+              continue
+            fi
+
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            if [ "$PATCH" = "0" ]; then
+              echo "$VERSION is a minor (X.0) release, left for ship-feature to cut manually, skipping"
+              continue
+            fi
+
+            TAG="v$VERSION"
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists, skipping"
+              continue
+            fi
+
+            git tag "$TAG" "$sha"
+            git push origin "$TAG"
+
+            MSG=$(git log -1 --format=%B "$sha")
+            gh release create "$TAG" --title "$TAG" --notes "$MSG" --prerelease
+          done
