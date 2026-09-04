@@ -19,6 +19,8 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: gradle/actions/setup-gradle@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10
