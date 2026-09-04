@@ -14,10 +14,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Tag and pre-release each new patch commit
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.event.after }}
         run: |
@@ -53,6 +54,7 @@ jobs:
             git tag "$TAG" "$sha"
             git push origin "$TAG"
 
-            MSG=$(git log -1 --format=%B "$sha")
+            # strip the leading "[vX.Y.Z] " from the subject — the release title already shows the version
+            MSG=$(git log -1 --format=%B "$sha" | sed -E '1s/^\[v[0-9]+\.[0-9]+\.[0-9]+\]\s*//')
             gh release create "$TAG" --title "$TAG" --notes "$MSG" --prerelease
           done
