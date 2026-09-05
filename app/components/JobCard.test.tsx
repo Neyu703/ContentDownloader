@@ -115,7 +115,7 @@ describe("JobCard — stalled hint", () => {
   it("appends the stalled hint when idle for over the threshold", async () => {
     const staleJob = { ...BASE_JOB, updatedAt: Date.now() - 25_000 };
     await render(<JobCard job={staleJob} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
-    expect(screen.getByText(/läuft weiter, YouTube antwortet gerade langsam/)).toBeTruthy();
+    expect(screen.getByText(/läuft weiter, die Quelle antwortet gerade langsam/)).toBeTruthy();
   });
 
   it("shows no stalled hint when recently updated", async () => {

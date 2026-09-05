@@ -8,9 +8,9 @@ export const de = {
     settings: "Einstellungen",
   },
   home: {
-    title: "YouTube Downloader",
-    subtitle: "Lädt YouTube-Videos als MP3 oder MP4 in der gewünschten Qualität herunter",
-    urlPlaceholder: "https://www.youtube.com/watch?v=...",
+    title: "ContentDownloader",
+    subtitle: "Lädt Videos von YouTube, TikTok, Instagram und mehr als MP3 oder MP4 in der gewünschten Qualität herunter",
+    urlPlaceholder: "Link einfügen (YouTube, TikTok, Instagram, ...)",
     pasteAccessibilityLabel: "Einfügen",
     loadingPlaylist: "Lade Playlist…",
     searchingVideo: "Suche Video…",
@@ -65,7 +65,7 @@ export const de = {
     etaLabel: "ETA: {{eta}}",
     runningSinceLabel: "Läuft seit: {{elapsed}}",
     saveFailed: "Speichern fehlgeschlagen.",
-    stalledSuffix: " · läuft weiter, YouTube antwortet gerade langsam",
+    stalledSuffix: " · läuft weiter, die Quelle antwortet gerade langsam",
   },
   playlist: {
     selectAll: "Alle auswählen",
@@ -116,7 +116,8 @@ export const de = {
     conversionFailed: "Konvertierung fehlgeschlagen.",
   },
   errors: {
-    invalidYoutubeUrl: "Bitte einen gültigen YouTube-Link angeben.",
+    invalidUrl: "Bitte einen gültigen Link angeben.",
+    playlistNotSupported: "Diese Plattform unterstützt keine Playlist-Downloads.",
     invalidStartIndex: "Ungültiger Startindex.",
     invalidFormat: "Bitte Audio oder Video auswählen.",
     invalidQuality: "Bitte eine gültige Qualität auswählen.",

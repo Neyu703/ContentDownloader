@@ -3,18 +3,10 @@ import cors from "cors";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { isValidYoutubeUrl, normalizeYoutubeUrl } from "./validate.js";
-import { userFacingError } from "./utils.js";
-import {
-  downloadMedia,
-  getVideoInfo,
-  getPlaylistInfo,
-  DOWNLOADS_DIR,
-  AUDIO_QUALITIES,
-  VIDEO_QUALITIES,
-  type ProgressUpdate,
-  type MediaFormat,
-} from "./youtube.js";
+import { AUDIO_QUALITIES, DOWNLOADS_DIR, VIDEO_QUALITIES } from "./environment.js";
+import { detectPlatform } from "./platforms/registry.js";
+import { isPlaylistCapable, type MediaFormat, type Platform } from "./platforms/Platform.js";
+import type { ProgressUpdate } from "./progress.js";
 
 fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 
@@ -36,11 +28,11 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim() || "audio";
 }
 
-/** Normalizes and validates `url`, writing the shared 400 response if invalid. Returns the normalized URL, or null. */
-function requireYoutubeUrl(url: unknown, res: Response): string | null {
-  const normalized = typeof url === "string" ? normalizeYoutubeUrl(url) : "";
-  if (isValidYoutubeUrl(normalized)) return normalized;
-  res.status(400).json({ errorKey: "errors.invalidYoutubeUrl" });
+/** Detects the platform for `url`, writing the shared 400 response if none matches. Returns the platform, or null. */
+function requirePlatform(url: unknown, res: Response): Platform | null {
+  const platform = typeof url === "string" ? detectPlatform(url) : null;
+  if (platform) return platform;
+  res.status(400).json({ errorKey: "errors.invalidUrl" });
   return null;
 }
 
@@ -67,21 +59,25 @@ app.get("/api/ping", (_req, res) => {
 });
 
 app.get("/api/info", async (req, res) => {
-  const url = requireYoutubeUrl(req.query.url, res);
-  if (!url) return;
+  const platform = requirePlatform(req.query.url, res);
+  if (!platform) return;
 
   try {
-    const info = await getVideoInfo(url);
+    const info = await platform.fetchInfo();
     res.json(info);
   } catch (err) {
-    const { key, params } = userFacingError(err);
+    const { key, params } = platform.describeError(err);
     res.status(502).json({ errorKey: key, errorParams: params });
   }
 });
 
 app.get("/api/playlist-info", async (req, res) => {
-  const url = requireYoutubeUrl(req.query.url, res);
-  if (!url) return;
+  const platform = requirePlatform(req.query.url, res);
+  if (!platform) return;
+  if (!isPlaylistCapable(platform)) {
+    res.status(400).json({ errorKey: "errors.playlistNotSupported" });
+    return;
+  }
   const start = Number(req.query.start ?? 1);
   if (!Number.isInteger(start) || start < 1) {
     res.status(400).json({ errorKey: "errors.invalidStartIndex" });
@@ -89,18 +85,18 @@ app.get("/api/playlist-info", async (req, res) => {
   }
 
   try {
-    const info = await getPlaylistInfo(url, start);
+    const info = await platform.fetchPlaylistInfo(start);
     res.json(info);
   } catch (err) {
-    const { key, params } = userFacingError(err);
+    const { key, params } = platform.describeError(err);
     res.status(502).json({ errorKey: key, errorParams: params });
   }
 });
 
 app.post("/api/convert", (req, res) => {
   const { format, quality } = req.body ?? {};
-  const url = requireYoutubeUrl(req.body?.url, res);
-  if (!url) return;
+  const platform = requirePlatform(req.body?.url, res);
+  if (!platform) return;
   if (format !== "audio" && format !== "video") {
     res.status(400).json({ errorKey: "errors.invalidFormat" });
     return;
@@ -115,9 +111,10 @@ app.post("/api/convert", (req, res) => {
   jobs.set(jobId, { stage: "starting", messageKey: "job.starting", progress: null });
   res.json({ jobId });
 
-  downloadMedia(url, format as MediaFormat, quality, (update) => {
-    jobs.set(jobId, update);
-  })
+  platform
+    .download(format as MediaFormat, quality, (update) => {
+      jobs.set(jobId, update);
+    })
     .then((result) => {
       finishJob(jobId, {
         stage: "done",
@@ -129,7 +126,7 @@ app.post("/api/convert", (req, res) => {
       });
     })
     .catch((err) => {
-      const { key, params } = userFacingError(err);
+      const { key, params } = platform.describeError(err);
       finishJob(jobId, {
         stage: "error",
         messageKey: "job.conversionFailed",

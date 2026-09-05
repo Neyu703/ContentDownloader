@@ -3,20 +3,51 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
-vi.mock("./youtube.js", async () => {
-  const actual = await vi.importActual<typeof import("./youtube.js")>("./youtube.js");
-  return {
-    ...actual,
-    getVideoInfo: vi.fn(),
-    getPlaylistInfo: vi.fn(),
-    downloadMedia: vi.fn(),
-  };
-});
+vi.mock("./platforms/registry.js", () => ({ detectPlatform: vi.fn() }));
 
 import { app } from "./app.js";
-import { getVideoInfo, getPlaylistInfo, downloadMedia, DOWNLOADS_DIR } from "./youtube.js";
+import { detectPlatform } from "./platforms/registry.js";
+import { DOWNLOADS_DIR } from "./environment.js";
+import type { Platform } from "./platforms/Platform.js";
 
 const VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+/** Mirrors BasePlatform's default describeError() so the fake behaves like a real platform would. */
+function describeErrorLikeBasePlatform(err: unknown): { key: string; params: { raw: string } } {
+  const raw = err instanceof Error ? err.message : String(err);
+  return { key: "errors.raw", params: { raw } };
+}
+
+/** A fake platform supporting only the core interface — used for /api/info and /api/convert tests. */
+function fakePlatform() {
+  return {
+    id: "fake",
+    checkAvailability: vi.fn(),
+    fetchInfo: vi.fn(),
+    buildFormatArgs: vi.fn(),
+    download: vi.fn(),
+    isRetryableError: vi.fn(),
+    describeError: vi.fn(describeErrorLikeBasePlatform),
+  };
+}
+
+/** A fake platform that also supports playlists — used for /api/playlist-info tests. */
+function fakePlaylistPlatform() {
+  return {
+    ...fakePlatform(),
+    fetchPlaylistInfo: vi.fn(),
+    defaultThumbnail: vi.fn(),
+  };
+}
+
+let platform: ReturnType<typeof fakePlaylistPlatform>;
+
+beforeEach(() => {
+  platform = fakePlaylistPlatform();
+  vi.mocked(detectPlatform).mockImplementation((url: string) =>
+    url === VALID_URL ? (platform as unknown as Platform) : null
+  );
+});
 
 describe("GET /api/ping", () => {
   it("reports ok with the service name", async () => {
@@ -30,17 +61,18 @@ describe("GET /api/info", () => {
   it("400s on a missing/invalid url", async () => {
     const res = await request(app).get("/api/info");
     expect(res.status).toBe(400);
+    expect(res.body.errorKey).toBe("errors.invalidUrl");
   });
 
   it("returns the video info on success", async () => {
-    vi.mocked(getVideoInfo).mockResolvedValueOnce({ title: "T", duration: 1, thumbnail: null, uploader: null });
+    platform.fetchInfo.mockResolvedValueOnce({ title: "T", duration: 1, thumbnail: null, uploader: null });
     const res = await request(app).get("/api/info").query({ url: VALID_URL });
     expect(res.status).toBe(200);
     expect(res.body.title).toBe("T");
   });
 
-  it("502s when getVideoInfo rejects", async () => {
-    vi.mocked(getVideoInfo).mockRejectedValueOnce(new Error("boom"));
+  it("502s when fetchInfo rejects", async () => {
+    platform.fetchInfo.mockRejectedValueOnce(new Error("boom"));
     const res = await request(app).get("/api/info").query({ url: VALID_URL });
     expect(res.status).toBe(502);
     expect(res.body.errorKey).toBe("errors.raw");
@@ -54,11 +86,20 @@ describe("GET /api/playlist-info", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400s with errors.playlistNotSupported when the platform doesn't support playlists", async () => {
+    vi.mocked(detectPlatform).mockImplementation((url: string) =>
+      url === VALID_URL ? (fakePlatform() as unknown as Platform) : null
+    );
+    const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL });
+    expect(res.status).toBe(400);
+    expect(res.body.errorKey).toBe("errors.playlistNotSupported");
+  });
+
   it("uses the default start when omitted", async () => {
-    vi.mocked(getPlaylistInfo).mockResolvedValueOnce({ title: "P", entries: [], totalCount: 0 });
+    platform.fetchPlaylistInfo.mockResolvedValueOnce({ title: "P", entries: [], totalCount: 0 });
     const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL });
     expect(res.status).toBe(200);
-    expect(getPlaylistInfo).toHaveBeenCalledWith(VALID_URL, 1);
+    expect(platform.fetchPlaylistInfo).toHaveBeenCalledWith(1);
   });
 
   it("400s on start=0", async () => {
@@ -78,14 +119,14 @@ describe("GET /api/playlist-info", () => {
   });
 
   it("returns playlist info for a valid start", async () => {
-    vi.mocked(getPlaylistInfo).mockResolvedValueOnce({ title: "P", entries: [], totalCount: 3 });
+    platform.fetchPlaylistInfo.mockResolvedValueOnce({ title: "P", entries: [], totalCount: 3 });
     const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL, start: "5" });
     expect(res.status).toBe(200);
-    expect(getPlaylistInfo).toHaveBeenCalledWith(VALID_URL, 5);
+    expect(platform.fetchPlaylistInfo).toHaveBeenCalledWith(5);
   });
 
-  it("502s when getPlaylistInfo rejects", async () => {
-    vi.mocked(getPlaylistInfo).mockRejectedValueOnce(new Error("nope"));
+  it("502s when fetchPlaylistInfo rejects", async () => {
+    platform.fetchPlaylistInfo.mockRejectedValueOnce(new Error("nope"));
     const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL });
     expect(res.status).toBe(502);
   });
@@ -126,7 +167,7 @@ describe("POST /api/convert", () => {
 
   it("starts a job, then resolves it to done via the polled job endpoint", async () => {
     let capturedOnProgress: ((u: unknown) => void) | undefined;
-    vi.mocked(downloadMedia).mockImplementationOnce((_url, _format, _quality, onProgress) => {
+    platform.download.mockImplementationOnce((_format: unknown, _quality: unknown, onProgress: (u: unknown) => void) => {
       capturedOnProgress = onProgress;
       return new Promise((resolve) => {
         onProgress({ stage: "fetching_info", messageKey: "job.fetchingInfo", progress: null });
@@ -156,7 +197,7 @@ describe("POST /api/convert", () => {
   it("evicts a finished job from the map after the TTL elapses", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {
-      vi.mocked(downloadMedia).mockResolvedValueOnce({ id: "x", filePath: "/x", title: "T", ext: "mp3" });
+      platform.download.mockResolvedValueOnce({ id: "x", filePath: "/x", title: "T", ext: "mp3" });
       const startRes = await request(app)
         .post("/api/convert")
         .send({ url: VALID_URL, format: "audio", quality: "320" });
@@ -173,8 +214,8 @@ describe("POST /api/convert", () => {
     }
   });
 
-  it("resolves a job to error when downloadMedia rejects", async () => {
-    vi.mocked(downloadMedia).mockRejectedValueOnce(new Error("conversion failed"));
+  it("resolves a job to error when download rejects", async () => {
+    platform.download.mockRejectedValueOnce(new Error("conversion failed"));
     const startRes = await request(app)
       .post("/api/convert")
       .send({ url: VALID_URL, format: "audio", quality: "320" });

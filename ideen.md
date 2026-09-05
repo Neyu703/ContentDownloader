@@ -28,11 +28,16 @@ nach Aufwand sortiert, klein → groß.
   Link pro Zeile, alle als eigene Jobs in die bestehende `jobs[]`-Liste einreihen. Die
   Job-Infrastruktur (Queue, Fortschritt pro Job) existiert bereits vollständig dafür.
   **Aufwand: klein–mittel**.
-- [ ] **[1-4] Multi-Plattform-Support (nicht nur YouTube)** — yt-dlp unterstützt selbst >1000 Seiten
+- [x] **[1-4] Multi-Plattform-Support (nicht nur YouTube)** — yt-dlp unterstützt selbst >1000 Seiten
   (TikTok, Instagram, Twitter/X, SoundCloud, Vimeo, Twitch-Clips …), aber
   `isValidYoutubeUrl()` blockt alles außer den 5 YouTube-Hosts hart ab. Der Produktname
   verspricht das bereits. **Aufwand: mittel** (Validierung lockern/generalisieren,
   Format-Erkennung pro Plattform testen).
+  Umgesetzt als objektorientiertes Design: ein `Platform`-Interface (+ optionales
+  `PlaylistCapablePlatform` für Plattformen mit Playlist-Support) mit einer Klasse pro Plattform
+  (YouTube, TikTok, Instagram, Twitter/X, SoundCloud, Vimeo, Twitch), synchron in Server (TS,
+  `server/src/platforms/`) und Android-Modul (Kotlin, `app/modules/ytdlp/android/.../platforms/`)
+  gespiegelt.
 - [ ] **[1-5] Android Share-Intent** — Link direkt aus der YouTube-/TikTok-App über "Teilen" an
   ContentDownloader schicken, statt manuell zu kopieren und in die App zu wechseln. Größter
   Reibungspunkt im aktuellen Ablauf. **Aufwand: mittel** (Expo Intent-Filter/Linking-Konfig).
@@ -286,7 +291,7 @@ bieten und was davon für ContentDownloader übertragbar ist:
 4. [x] [1-2] Automatischer Retry bei transienten Fehlern (bis zu 3 Versuche, server- und
    android-seitig gespiegelt)
 5. [x] [1-3] Batch-Queue (mehrere Links auf einmal einfügen)
-6. [ ] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
+6. [x] [1-4] Multi-Plattform-Support (Validierung generalisieren) — größter strategischer Hebel,
    da er den Produktnamen einlöst
 7. [x] [1-7] Playlist-Download
 

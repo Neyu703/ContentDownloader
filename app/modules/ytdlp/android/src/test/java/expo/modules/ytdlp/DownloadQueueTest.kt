@@ -5,9 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLResponse
+import expo.modules.ytdlp.platforms.YouTube
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -18,7 +18,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -216,61 +215,37 @@ class DownloadQueueTest {
     }
 
     // --- getPlaylistInfo() ---
+    // Detailed entry-parsing/paging behavior is generic and covered by
+    // platforms/PlaylistCapableBasePlatformTest.kt; these only check DownloadQueue's own
+    // orchestration (URL/capability rejection, and that it actually wires prepare() + the platform).
 
     @Test
-    fun `getPlaylistInfo rejects a non-YouTube url without touching the engine`() = runTest {
-        val error = runCatching { DownloadQueue.getPlaylistInfo(context, "https://vimeo.com/x") }.exceptionOrNull()
+    fun `getPlaylistInfo rejects an unsupported url without touching the engine`() = runTest {
+        val error = runCatching { DownloadQueue.getPlaylistInfo(context, "https://example.com/x") }.exceptionOrNull()
 
         assertTrue(error is IllegalArgumentException)
-        assertEquals("errors.invalidYoutubeUrl", error?.message)
+        assertEquals("errors.invalidUrl", error?.message)
         verify(exactly = 0) { engine.execute(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `getPlaylistInfo parses title, entries and totalCount from the flat-playlist output`() = runTest {
-        val output = """
-            {"id":"a","title":"Video A","playlist_title":"My Mix","playlist_count":2}
-            {"id":"b","title":"Video B"}
-        """.trimIndent()
-        every { engine.execute(any(), any(), any(), null) } returns response(output)
+    fun `getPlaylistInfo rejects a platform that doesn't support playlists`() = runTest {
+        val error = runCatching { DownloadQueue.getPlaylistInfo(context, "https://www.tiktok.com/@u/video/1") }.exceptionOrNull()
 
-        val result = DownloadQueue.getPlaylistInfo(context, "https://youtu.be/x")
-
-        assertEquals("My Mix", result["title"])
-        assertEquals(2, result["totalCount"])
-        val entries = result["entries"] as List<*>
-        assertEquals(2, entries.size)
+        assertTrue(error is IllegalArgumentException)
+        assertEquals("errors.playlistNotSupported", error?.message)
+        verify(exactly = 0) { engine.execute(any(), any(), any(), any()) }
     }
 
     @Test
-    fun `getPlaylistInfo defaults to an untitled playlist with no known total when the output has no matches`() = runTest {
-        every { engine.execute(any(), any(), any(), null) } returns response("")
-
-        val result = DownloadQueue.getPlaylistInfo(context, "https://youtu.be/x")
-
-        assertEquals("Playlist", result["title"])
-        assertNull(result["totalCount"])
-        assertEquals(emptyList<Any?>(), result["entries"])
-    }
-
-    @Test
-    fun `getPlaylistInfo defaults title and totalCount when the first entry carries neither key`() = runTest {
+    fun `getPlaylistInfo prepares the engine and returns the playlist-capable platform's result`() = runTest {
+        every { engine.version(any()) } returns "2024.1.1"
         every { engine.execute(any(), any(), any(), null) } returns response("""{"id":"a","title":"Video A"}""")
 
         val result = DownloadQueue.getPlaylistInfo(context, "https://youtu.be/x")
 
-        assertEquals("Playlist", result["title"])
-        assertNull(result["totalCount"])
-    }
-
-    @Test
-    fun `getPlaylistInfo requests the correct playlist-items range`() = runTest {
-        val requestSlot = slot<YoutubeDLRequest>()
-        every { engine.execute(capture(requestSlot), any(), any(), null) } returns response("")
-
-        DownloadQueue.getPlaylistInfo(context, "https://youtu.be/x", start = 51, count = 50)
-
-        assertEquals("51-100", requestSlot.captured.getOption("--playlist-items"))
+        verify { engine.init(any()) }
+        assertEquals(1, (result["entries"] as List<*>).size)
     }
 
     // --- cancel() ---
@@ -387,14 +362,14 @@ class DownloadQueueTest {
     }
 
     @Test
-    fun `runJob sets ERROR for an invalid url without touching the engine`() = runTest {
-        val job = DownloadJob("id-1", "https://vimeo.com/x", "audio", "320")
+    fun `runJob sets ERROR for an unsupported url without touching the engine`() = runTest {
+        val job = DownloadJob("id-1", "https://example.com/x", "audio", "320")
 
         DownloadQueue.runJob(context, job)
 
         assertEquals(JobPhase.ERROR, job.phase)
         assertEquals("errors.raw", job.error)
-        assertEquals(mapOf("raw" to "errors.invalidYoutubeUrl"), job.errorParams)
+        assertEquals(mapOf("raw" to "errors.invalidUrl"), job.errorParams)
         verify(exactly = 0) { engine.init(any()) }
     }
 
@@ -571,57 +546,9 @@ class DownloadQueueTest {
         verify(exactly = 1) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
     }
 
-    // --- isRetryableError() ---
-
-    @Test
-    fun `isRetryableError is false for the known-permanent sign-in gate`() {
-        assertFalse(DownloadQueue.isRetryableError(RuntimeException("ERROR: Sign in to confirm you're not a bot")))
-    }
-
-    @Test
-    fun `isRetryableError is true for any other error`() {
-        assertTrue(DownloadQueue.isRetryableError(RuntimeException("HTTP Error 403: Forbidden")))
-    }
-
-    // --- fetchMetadata() ---
-
-    @Test
-    fun `fetchMetadata parses title and thumbnail from the last non-empty combined output line`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("A Title|||https://example.com/thumb.jpg\n\n")
-
-        val metadata = DownloadQueue.fetchMetadata(job)
-
-        assertEquals("A Title", metadata.title)
-        assertEquals("https://example.com/thumb.jpg", metadata.thumbnail)
-    }
-
-    @Test
-    fun `fetchMetadata falls back to the job url and a null thumbnail when the output is blank`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("   ")
-
-        val metadata = DownloadQueue.fetchMetadata(job)
-
-        assertEquals(job.url, metadata.title)
-        assertNull(metadata.thumbnail)
-    }
-
-    @Test
-    fun `fetchMetadata treats yt-dlp's NA placeholder as no thumbnail`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("A Title|||NA")
-
-        assertNull(DownloadQueue.fetchMetadata(job).thumbnail)
-    }
-
-    @Test
-    fun `fetchMetadata falls back to the job url when the title half is blank`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
-        every { engine.execute(any(), any(), any(), null) } returns response("|||https://example.com/thumb.jpg")
-
-        assertEquals(job.url, DownloadQueue.fetchMetadata(job).title)
-    }
+    // isRetryableError(), fetchMetadata() and buildRequest() moved onto Platform instances — see
+    // platforms/BasePlatformTest.kt (generic behavior) and platforms/YouTubeTest.kt
+    // (YouTube-specific sign-in-gate handling).
 
     // --- sanitizeFilename() / renameToTitledFile() ---
 
@@ -695,47 +622,13 @@ class DownloadQueueTest {
         }
         val outputDir = File(context.cacheDir, "download-finalize-test-${System.nanoTime()}").apply { mkdirs() }
 
-        DownloadQueue.downloadAndFinalize(job, outputDir, "mp3")
+        DownloadQueue.downloadAndFinalize(YouTube(job.url), job, outputDir, "mp3")
 
         assertNotNull(job.filePath)
         assertTrue(File(job.filePath!!).name.contains("youtu.be"))
     }
 
-    // --- buildRequest() ---
-
-    @Test
-    fun `buildRequest builds the audio extraction options`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "192")
-
-        val request = DownloadQueue.buildRequest(job, "/out/%(ext)s")
-
-        assertEquals("bestaudio/best", request.getOption("-f"))
-        assertTrue(request.hasOption("-x"))
-        assertEquals("mp3", request.getOption("--audio-format"))
-        assertEquals("192K", request.getOption("--audio-quality"))
-    }
-
-    @Test
-    fun `buildRequest applies a height filter for a specific video quality`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "video", "720")
-
-        val request = DownloadQueue.buildRequest(job, "/out/%(ext)s")
-
-        assertEquals(
-            "bestvideo[height<=720]+bestaudio/best[height<=720]/best[height<=720]",
-            request.getOption("-f")
-        )
-        assertEquals("mp4", request.getOption("--merge-output-format"))
-    }
-
-    @Test
-    fun `buildRequest omits the height filter for the best video quality`() {
-        val job = DownloadJob("id-1", "https://youtu.be/x", "video", "best")
-
-        val request = DownloadQueue.buildRequest(job, "/out/%(ext)s")
-
-        assertEquals("bestvideo+bestaudio/best/best", request.getOption("-f"))
-    }
+    // buildRequest() moved onto Platform instances — see platforms/BasePlatformTest.kt.
 
     // --- onOutput() ---
 
@@ -837,45 +730,6 @@ class DownloadQueueTest {
         assertEquals(JobPhase.CONVERTING, job.phase)
     }
 
-    // --- describeError() / describeErrorRaw() ---
-
-    @Test
-    fun `describeError returns the sign-in-required key with no params when the sign-in gate matches`() {
-        val error = RuntimeException("ERROR: Sign in to confirm you're not a bot")
-        assertEquals("errors.signInRequired" to null, DownloadQueue.describeError(error))
-    }
-
-    @Test
-    fun `describeError wraps an unrelated message as errors raw with the raw text as a param`() {
-        assertEquals("errors.raw" to mapOf("raw" to "boom"), DownloadQueue.describeError(RuntimeException("boom")))
-    }
-
-    @Test
-    fun `describeErrorRaw strips the ERROR prefix from the last non-empty line`() {
-        val error = RuntimeException("WARNING: ignored\n\nERROR: the real reason")
-        assertEquals("the real reason", DownloadQueue.describeErrorRaw(error))
-    }
-
-    @Test
-    fun `describeErrorRaw walks the cause chain when the top message is blank`() {
-        val cause = IllegalStateException("root cause")
-        val wrapper = RuntimeException(null, cause)
-
-        assertEquals("IllegalStateException: root cause", DownloadQueue.describeErrorRaw(wrapper))
-    }
-
-    @Test
-    fun `describeErrorRaw skips a cause with a blank message and keeps walking`() {
-        val root = IllegalStateException("real reason")
-        val blankCause = RuntimeException("   ", root)
-        val wrapper = RuntimeException(null, blankCause)
-
-        assertEquals("IllegalStateException: real reason", DownloadQueue.describeErrorRaw(wrapper))
-    }
-
-    @Test
-    fun `describeErrorRaw falls back to the class name when no message exists anywhere`() {
-        val wrapper = RuntimeException(null, RuntimeException())
-        assertEquals("RuntimeException", DownloadQueue.describeErrorRaw(wrapper))
-    }
+    // describeError() and describeErrorRaw() moved onto Platform instances / a shared internal
+    // function — see platforms/YouTubeTest.kt and platforms/ErrorDescriptionTest.kt.
 }

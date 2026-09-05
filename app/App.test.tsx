@@ -73,7 +73,7 @@ describe("App", () => {
 
   it("renders the Home tab once i18n initialization resolves", async () => {
     await render(<App />);
-    await waitFor(() => expect(screen.getByText("YouTube Downloader")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("ContentDownloader")).toBeTruthy());
     expect(screen.queryByText("Änderungsprotokoll")).toBeNull();
   });
 

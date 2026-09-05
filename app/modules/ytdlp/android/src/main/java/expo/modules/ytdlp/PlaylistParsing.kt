@@ -12,15 +12,19 @@ internal fun JSONObject.playlistTitle(): String? =
 internal fun parsePlaylistJsonLines(output: String): List<JSONObject> =
     nonEmptyTrimmedLines(output).mapNotNull { runCatching { JSONObject(it) }.getOrNull() }
 
-/** Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. */
-internal fun toEntryMap(entry: JSONObject): Map<String, Any?> {
+/**
+ * Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. [defaultThumbnail] is
+ * the platform-specific fallback used when yt-dlp didn't return a thumbnail for this entry (e.g.
+ * YouTube's i.ytimg.com convention) — most platforms have none, so they pass `{ null }`.
+ */
+internal fun toEntryMap(entry: JSONObject, defaultThumbnail: (id: String) -> String?): Map<String, Any?> {
     val id = entry.optString("id", "")
     val thumbnails = entry.optJSONArray("thumbnails")
     // getJSONObject() throws (never returns null) on a bad index, and optString(String) always
     // returns a non-null string (defaulting to "") — no further null-checks are needed on either
     // once thumbnails is confirmed non-empty.
     val thumbnail = thumbnails?.takeIf { it.length() > 0 }?.let { it.getJSONObject(it.length() - 1).optString("url")!! }
-        ?: id.takeIf(String::isNotEmpty)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+        ?: id.takeIf(String::isNotEmpty)?.let(defaultThumbnail)
     return mapOf(
         "id" to id,
         "url" to (entry.optString("webpage_url").takeIf(String::isNotBlank) ?: entry.optString("url")),

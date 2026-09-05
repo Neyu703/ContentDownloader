@@ -1,5 +1,5 @@
 import app from "./app.js";
-import { updateYtDlp, checkEnvironment } from "./youtube.js";
+import { updateYtDlp, checkEnvironment } from "./environment.js";
 
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => {

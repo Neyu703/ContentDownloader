@@ -15,14 +15,17 @@ vi.mock("node:fs", () => ({
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import {
-  updateYtDlp,
-  checkEnvironment,
-  getVideoInfo,
-  getPlaylistInfo,
-  downloadMedia,
-  type ProgressUpdate,
-} from "./youtube.js";
+import type { ProgressUpdate } from "../progress.js";
+import { TikTok } from "./TikTok.js";
+
+/**
+ * BasePlatform's behavior is generic across every non-playlist platform — exercised here through
+ * TikTok (a plain BasePlatform subclass with no overrides) to prove that it really is generic and
+ * not accidentally YouTube-specific.
+ */
+function tiktok(url = "https://www.tiktok.com/@someuser/video/123") {
+  return new TikTok(url);
+}
 
 /** A minimal fake ChildProcess: stdout/stderr are EventEmitters, plus its own "error"/"close" events. */
 function createFakeChild() {
@@ -53,141 +56,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("updateYtDlp", () => {
-  it("logs the trimmed output on success", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = updateYtDlp();
-    await resolveSpawn(child, "updated\n");
-    await promise;
-    expect(logSpy).toHaveBeenCalledWith("updated");
-  });
-
-  it("warns with the Error message when the update fails with an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = updateYtDlp();
-    child.stderr.emit("data", Buffer.from("network down"));
-    child.emit("close", 1);
-    await promise;
-    expect(warnSpy).toHaveBeenCalledWith("yt-dlp Selbst-Update fehlgeschlagen:", "network down");
-  });
-
-  it("warns with the raw rejection when it is not an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = updateYtDlp();
-    child.emit("error", "spawn failed" as never);
-    await promise;
-    expect(warnSpy).toHaveBeenCalled();
-  });
-});
-
-describe("checkEnvironment", () => {
-  it("logs the version, no warnings, when yt-dlp/ffmpeg/PO-token script are all present", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    await resolveSpawn(versionChild, "2026.01.01\n");
-    ffmpegChild.emit("close", 0);
-    await promise;
-
-    expect(logSpy).toHaveBeenCalledWith("yt-dlp Version: 2026.01.01");
-    expect(warnSpy).not.toHaveBeenCalled();
-  });
-
-  it("warns when the yt-dlp version check fails with an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    versionChild.emit("close", 1);
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
-    ffmpegChild.emit("close", 0);
-    await promise;
-
-    expect(warnSpy).toHaveBeenCalledWith("WARNUNG: yt-dlp nicht erreichbar:", expect.any(String));
-  });
-
-  it("warns when the yt-dlp version check fails without a proper Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    versionChild.emit("error", "boom" as never);
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
-    ffmpegChild.emit("close", 0);
-    await promise;
-
-    expect(warnSpy).toHaveBeenCalledWith("WARNUNG: yt-dlp nicht erreichbar:", "boom");
-  });
-
-  it("warns when ffmpeg is not found (non-zero exit)", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    await resolveSpawn(versionChild, "1.0\n");
-    ffmpegChild.emit("close", 1);
-    await promise;
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("ffmpeg wurde nicht gefunden"));
-  });
-
-  it("warns when ffmpeg spawn itself errors", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    await resolveSpawn(versionChild, "1.0\n");
-    ffmpegChild.emit("error", new Error("enoent"));
-    await promise;
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("ffmpeg wurde nicht gefunden"));
-  });
-
-  it("warns when the PO-token provider script is missing", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    const versionChild = createFakeChild();
-    const ffmpegChild = createFakeChild();
-    mockNextSpawn(versionChild);
-    mockNextSpawn(ffmpegChild);
-
-    const promise = checkEnvironment();
-    await resolveSpawn(versionChild, "1.0\n");
-    ffmpegChild.emit("close", 0);
-    await promise;
-
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("PO-Token-Skript fehlt"));
-  });
-});
-
-describe("getVideoInfo", () => {
+describe("fetchInfo", () => {
   it("returns metadata straight through when every field is present", async () => {
     const child = createFakeChild();
     mockNextSpawn(child);
-    const promise = getVideoInfo("https://www.youtube.com/watch?v=x");
+    const promise = tiktok().fetchInfo();
     await resolveSpawn(child, JSON.stringify({ title: "T", duration: 42, thumbnail: "thumb.jpg", uploader: "U" }));
     await expect(promise).resolves.toEqual({ title: "T", duration: 42, thumbnail: "thumb.jpg", uploader: "U" });
   });
@@ -195,7 +68,7 @@ describe("getVideoInfo", () => {
   it("applies every fallback when fields are missing", async () => {
     const child = createFakeChild();
     mockNextSpawn(child);
-    const promise = getVideoInfo("https://www.youtube.com/watch?v=x");
+    const promise = tiktok().fetchInfo();
     await resolveSpawn(child, JSON.stringify({}));
     await expect(promise).resolves.toEqual({
       title: "Unknown title",
@@ -206,100 +79,7 @@ describe("getVideoInfo", () => {
   });
 });
 
-describe("getPlaylistInfo", () => {
-  it("parses playlist_title, playlist_count, and full entry fields from multi-line JSON", async () => {
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    const lines = [
-      JSON.stringify({
-        id: "abc",
-        playlist_title: "My Playlist",
-        playlist_count: 2,
-        webpage_url: "https://youtube.com/watch?v=abc",
-        title: "Video A",
-        thumbnails: [{ url: "small.jpg" }, { url: "large.jpg" }],
-        duration: 100,
-      }),
-      JSON.stringify({ id: "def", title: "Video B" }),
-    ].join("\n");
-    await resolveSpawn(child, lines);
-    const info = await promise;
-
-    expect(info.title).toBe("My Playlist");
-    expect(info.totalCount).toBe(2);
-    expect(info.entries).toHaveLength(2);
-    expect(info.entries[0]).toEqual({
-      id: "abc",
-      url: "https://youtube.com/watch?v=abc",
-      title: "Video A",
-      thumbnail: "large.jpg",
-      duration: 100,
-    });
-    // second entry: falls back to url from id, title from id, synthesized thumbnail, null duration
-    expect(info.entries[1]).toEqual({
-      id: "def",
-      url: undefined,
-      title: "Video B",
-      thumbnail: "https://i.ytimg.com/vi/def/hqdefault.jpg",
-      duration: null,
-    });
-  });
-
-  it("falls back to the legacy playlist field, then to a literal default title", async () => {
-    const childA = createFakeChild();
-    mockNextSpawn(childA);
-    const promiseA = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    await resolveSpawn(childA, JSON.stringify({ id: "1", playlist: "Legacy Name" }));
-    expect((await promiseA).title).toBe("Legacy Name");
-
-    const childB = createFakeChild();
-    mockNextSpawn(childB);
-    const promiseB = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    await resolveSpawn(childB, JSON.stringify({ id: "1" }));
-    expect((await promiseB).title).toBe("Playlist");
-  });
-
-  it("skips blank lines and defaults totalCount to null when playlist_count is missing/non-numeric", async () => {
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    await resolveSpawn(child, `\n${JSON.stringify({ id: "1", playlist_count: "not a number" })}\n\n`);
-    const info = await promise;
-    expect(info.entries).toHaveLength(1);
-    expect(info.totalCount).toBeNull();
-  });
-
-  it("gives no thumbnail when neither thumbnails nor id are present", async () => {
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    await resolveSpawn(child, JSON.stringify({ title: "No id" }));
-    const info = await promise;
-    expect(info.entries[0].thumbnail).toBeNull();
-  });
-
-  it("sends the requested 1-indexed --playlist-items range, defaulting to the page size", async () => {
-    const child = createFakeChild();
-    mockNextSpawn(child);
-    const promise = getPlaylistInfo("https://www.youtube.com/playlist?list=x");
-    await resolveSpawn(child, "");
-    await promise;
-    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
-    const idx = args.indexOf("--playlist-items");
-    expect(args[idx + 1]).toBe("1-50");
-
-    const child2 = createFakeChild();
-    mockNextSpawn(child2);
-    const promise2 = getPlaylistInfo("https://www.youtube.com/playlist?list=x", 51, 25);
-    await resolveSpawn(child2, "");
-    await promise2;
-    const args2 = vi.mocked(spawn).mock.calls[1][1] as string[];
-    expect(args2[args2.indexOf("--playlist-items") + 1]).toBe("51-75");
-  });
-});
-
-describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia)", () => {
+describe("download / parseProgressLine / buildFormatArgs (via download)", () => {
   function progressUpdates(calls: ProgressUpdate[][]): ProgressUpdate[] {
     return calls.map(([update]) => update);
   }
@@ -311,7 +91,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(downloadChild);
 
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "320", onProgress);
+    const promise = tiktok().download("audio", "320", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "My Song" }));
 
     // Feed a download-progress line, then extraction, in two chunks to exercise line buffering.
@@ -347,7 +127,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(downloadChild);
 
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "video", "720", onProgress);
+    const promise = tiktok().download("video", "720", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "My Video" }));
     downloadChild.stdout.emit("data", Buffer.from("[ffmpeg] merging\n"));
     downloadChild.stdout.emit("data", Buffer.from("[Merger] merged\n"));
@@ -369,7 +149,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "video", "best", vi.fn());
+    const promise = tiktok().download("video", "best", vi.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
@@ -383,7 +163,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     onProgress.mockClear();
     downloadChild.stdout.emit("data", Buffer.from("some unrelated yt-dlp line\n"));
@@ -398,7 +178,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit(
       "data",
@@ -419,7 +199,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  20.0% of ~10.00Xyz\n"));
     downloadChild.emit("close", 0);
@@ -436,7 +216,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  75.0% of ~5.00MiB at 2.00MiB/s\n"));
     downloadChild.emit("close", 0);
@@ -452,7 +232,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  5.0% of ~1024.00KiB\n"));
     downloadChild.emit("close", 0);
@@ -468,7 +248,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const onProgress = vi.fn();
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", onProgress);
+    const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  1.0% of ~500B\n"));
     downloadChild.emit("close", 0);
@@ -476,22 +256,6 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     const updates = progressUpdates(onProgress.mock.calls as ProgressUpdate[][]);
     const update = updates.find((u) => u.stage === "downloading" && u.progress === 1)!;
     expect(update.totalMB).toBeCloseTo(500);
-  });
-
-  it("propagates a non-retryable failure (sign-in gate) immediately without retrying, still writes the log", async () => {
-    const infoChild = createFakeChild();
-    const downloadChild = createFakeChild();
-    mockNextSpawn(infoChild);
-    mockNextSpawn(downloadChild);
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", vi.fn());
-    await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
-    downloadChild.stderr.emit("data", Buffer.from("ERROR: Sign in to confirm you're not a bot"));
-    downloadChild.emit("close", 1);
-    await expect(promise).rejects.toThrow("Sign in to confirm you're not a bot");
-    expect(spawn).toHaveBeenCalledTimes(2); // info fetch + exactly one download attempt, no retry
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    const written = vi.mocked(fs.writeFileSync).mock.calls.at(-1)![1] as string;
-    expect(written).toContain("ERROR: ERROR: Sign in to confirm you're not a bot");
   });
 
   describe("retry on transient failure", () => {
@@ -506,7 +270,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
         mockNextSpawn(downloadChild2);
 
         const onProgress = vi.fn();
-        const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "320", onProgress);
+        const promise = tiktok().download("audio", "320", onProgress);
         await resolveSpawn(infoChild, JSON.stringify({ title: "My Song" }));
 
         downloadChild1.stderr.emit("data", Buffer.from("HTTP Error 403: Forbidden"));
@@ -540,7 +304,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
         mockNextSpawn(infoChild);
         downloadChildren.forEach(mockNextSpawn);
 
-        const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "320", vi.fn());
+        const promise = tiktok().download("audio", "320", vi.fn());
         await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
 
         for (const [index, child] of downloadChildren.entries()) {
@@ -574,7 +338,7 @@ describe("downloadMedia / parseProgressLine / buildFormatArgs (via downloadMedia
     vi.mocked(fs.statSync).mockImplementation(
       (p) => ({ mtimeMs: Number(String(p).match(/old-(\d+)/)?.[1] ?? 0) }) as never
     );
-    const promise = downloadMedia("https://www.youtube.com/watch?v=x", "audio", "128", vi.fn());
+    const promise = tiktok().download("audio", "128", vi.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;

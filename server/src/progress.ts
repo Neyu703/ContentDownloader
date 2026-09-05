@@ -1,4 +1,4 @@
-import type { MediaFormat } from "./youtube.js";
+import type { MediaFormat } from "./platforms/Platform.js";
 
 export interface ProgressUpdate {
   stage: "fetching_info" | "downloading" | "converting";

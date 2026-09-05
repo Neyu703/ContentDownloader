@@ -15,7 +15,7 @@ enum class JobPhase(val jsName: String) {
         get() = this == DONE || this == ERROR || this == CANCELLED
 }
 
-/** Result of DownloadQueue.fetchMetadata() — a job's resolved title and (if any) thumbnail URL. */
+/** Result of a Platform's fetchMetadata() — a job's resolved title and (if any) thumbnail URL. */
 data class JobMetadata(val title: String, val thumbnail: String?)
 
 /** One-time preparation of the bundled binaries. Mirrored by `SetupPhase` in app/downloader/types.ts. */

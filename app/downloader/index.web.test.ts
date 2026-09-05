@@ -102,9 +102,9 @@ describe("enqueue", () => {
     jest
       .mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
-      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.invalidYoutubeUrl" }, false));
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.invalidUrl" }, false));
     await expect(downloader.enqueue({ url: "u", format: "audio", quality: "320" })).rejects.toThrow(
-      "Bitte einen gültigen YouTube-Link angeben."
+      "Bitte einen gültigen Link angeben."
     );
   });
 

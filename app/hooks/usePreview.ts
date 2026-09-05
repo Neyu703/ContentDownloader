@@ -35,7 +35,11 @@ export function usePreview(url: string) {
       const promise = downloader.getVideoInfo!(trimmed, controller.signal).catch(() => null);
       previewRequestRef.current = { url: trimmed, promise };
       promise.then((info) => {
-        if (!cancelled && info) setPreview({ url: trimmed, info });
+        if (cancelled) return;
+        // A failed fetch (unsupported url, network error, ...) must clear any stale preview from
+        // a previous url — otherwise the last successful preview keeps showing under a url that
+        // no longer matches it, with no indication anything went wrong.
+        setPreview(info ? { url: trimmed, info } : null);
       }).finally(() => {
         if (!cancelled) setIsPreviewLoading(false);
       });

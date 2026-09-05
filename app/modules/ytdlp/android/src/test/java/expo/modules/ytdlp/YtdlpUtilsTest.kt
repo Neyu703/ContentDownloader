@@ -2,85 +2,14 @@ package expo.modules.ytdlp
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
+// org.json.JSONObject is a stub on the plain JVM; Robolectric provides a working shadow.
 @RunWith(RobolectricTestRunner::class)
 class YtdlpUtilsTest {
-
-    // --- isValidYoutubeUrl (needs Robolectric for android.net.Uri.parse) ---
-
-    @Test
-    fun `accepts every known YouTube host over https`() {
-        listOf(
-            "https://youtube.com/watch?v=x",
-            "https://www.youtube.com/watch?v=x",
-            "https://m.youtube.com/watch?v=x",
-            "https://music.youtube.com/watch?v=x",
-            "https://youtu.be/x"
-        ).forEach { url -> assertTrue(url, isValidYoutubeUrl(url)) }
-    }
-
-    @Test
-    fun `accepts a YouTube host over plain http`() {
-        assertTrue(isValidYoutubeUrl("http://youtube.com/watch?v=x"))
-    }
-
-    @Test
-    fun `rejects a non-YouTube host`() {
-        assertFalse(isValidYoutubeUrl("https://vimeo.com/12345"))
-    }
-
-    @Test
-    fun `rejects a non-http(s) scheme`() {
-        assertFalse(isValidYoutubeUrl("ftp://youtube.com/watch?v=x"))
-    }
-
-    @Test
-    fun `rejects a malformed url instead of throwing`() {
-        assertFalse(isValidYoutubeUrl("not a url at all"))
-    }
-
-    @Test
-    fun `rejects a url with a valid scheme but no host`() {
-        assertFalse(isValidYoutubeUrl("https:opaque"))
-    }
-
-    @Test
-    fun `host matching is case-insensitive`() {
-        assertTrue(isValidYoutubeUrl("https://WWW.YOUTUBE.COM/watch?v=x"))
-    }
-
-    // --- normalizeYoutubeUrl ---
-
-    @Test
-    fun `normalizeYoutubeUrl prepends https to a schemeless link`() {
-        assertEquals("https://youtube.com/watch?v=jNQXAC9IVRw", normalizeYoutubeUrl("youtube.com/watch?v=jNQXAC9IVRw"))
-    }
-
-    @Test
-    fun `normalizeYoutubeUrl leaves an already-schemed link unchanged`() {
-        assertEquals("http://youtube.com/watch?v=x", normalizeYoutubeUrl("http://youtube.com/watch?v=x"))
-    }
-
-    @Test
-    fun `normalizeYoutubeUrl trims surrounding whitespace before checking for a scheme`() {
-        assertEquals("https://youtu.be/x", normalizeYoutubeUrl("  youtu.be/x  "))
-    }
-
-    @Test
-    fun `a normalized schemeless link passes isValidYoutubeUrl`() {
-        assertTrue(isValidYoutubeUrl(normalizeYoutubeUrl("youtube.com/watch?v=x")))
-    }
-
-    @Test
-    fun `normalizeYoutubeUrl prepends https to a schemeless www link`() {
-        assertEquals("https://www.youtube.com/watch?v=x", normalizeYoutubeUrl("www.youtube.com/watch?v=x"))
-    }
 
     // --- nonEmptyTrimmedLines ---
 
@@ -133,6 +62,9 @@ class YtdlpUtilsTest {
     }
 
     // --- toEntryMap ---
+    // The i.ytimg.com fallback thumbnail is YouTube-specific and tested in
+    // platforms/YouTubeTest.kt; here, defaultThumbnail is a plain lambda so these tests exercise
+    // toEntryMap()'s own logic in isolation.
 
     @Test
     fun `toEntryMap prefers webpage_url over the flat url field`() {
@@ -143,7 +75,7 @@ class YtdlpUtilsTest {
             .put("title", "A Video")
             .put("duration", 125.0)
 
-        val map = toEntryMap(json)
+        val map = toEntryMap(json) { null }
 
         assertEquals("abc", map["id"])
         assertEquals("https://youtu.be/abc", map["url"])
@@ -154,25 +86,25 @@ class YtdlpUtilsTest {
     @Test
     fun `toEntryMap falls back to the flat url field when webpage_url is blank`() {
         val json = JSONObject().put("id", "abc").put("url", "raw-url")
-        assertEquals("raw-url", toEntryMap(json)["url"])
+        assertEquals("raw-url", toEntryMap(json) { null }["url"])
     }
 
     @Test
     fun `toEntryMap falls back to the id as title when title is missing`() {
         val json = JSONObject().put("id", "abc")
-        assertEquals("abc", toEntryMap(json)["title"])
+        assertEquals("abc", toEntryMap(json) { null }["title"])
     }
 
     @Test
     fun `toEntryMap maps a missing duration to null`() {
         val json = JSONObject().put("id", "abc")
-        assertNull(toEntryMap(json)["duration"])
+        assertNull(toEntryMap(json) { null }["duration"])
     }
 
     @Test
     fun `toEntryMap maps an explicit JSON null duration to null`() {
         val json = JSONObject().put("id", "abc").put("duration", JSONObject.NULL)
-        assertNull(toEntryMap(json)["duration"])
+        assertNull(toEntryMap(json) { null }["duration"])
     }
 
     @Test
@@ -182,24 +114,25 @@ class YtdlpUtilsTest {
             .put(JSONObject().put("url", "https://example.com/large.jpg"))
         val json = JSONObject().put("id", "abc").put("thumbnails", thumbnails)
 
-        assertEquals("https://example.com/large.jpg", toEntryMap(json)["thumbnail"])
+        assertEquals("https://example.com/large.jpg", toEntryMap(json) { null }["thumbnail"])
     }
 
     @Test
-    fun `toEntryMap derives a default thumbnail from the id when none is provided`() {
+    fun `toEntryMap calls defaultThumbnail with the entry id when no thumbnails are provided`() {
         val json = JSONObject().put("id", "abc")
-        assertEquals("https://i.ytimg.com/vi/abc/hqdefault.jpg", toEntryMap(json)["thumbnail"])
+
+        assertEquals("fallback-for-abc", toEntryMap(json) { id -> "fallback-for-$id" }["thumbnail"])
     }
 
     @Test
     fun `toEntryMap has no default thumbnail when both thumbnails and id are empty`() {
         val json = JSONObject().put("id", "")
-        assertNull(toEntryMap(json)["thumbnail"])
+        assertNull(toEntryMap(json) { "should never be called" }["thumbnail"])
     }
 
     @Test
     fun `toEntryMap treats an empty thumbnails array like no thumbnails at all`() {
         val json = JSONObject().put("id", "abc").put("thumbnails", org.json.JSONArray())
-        assertEquals("https://i.ytimg.com/vi/abc/hqdefault.jpg", toEntryMap(json)["thumbnail"])
+        assertEquals("fallback-for-abc", toEntryMap(json) { id -> "fallback-for-$id" }["thumbnail"])
     }
 }

@@ -123,7 +123,7 @@ describe("paste", () => {
     await render(<HomeScreen />);
     await fireEvent.press(screen.getByLabelText("Einfügen"));
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("https://www.youtube.com/watch?v=...").props.value).toBe(
+      expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe(
         "https://youtu.be/abc"
       );
     });
@@ -134,7 +134,7 @@ describe("paste", () => {
     await render(<HomeScreen />);
     await fireEvent.press(screen.getByLabelText("Einfügen"));
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("https://www.youtube.com/watch?v=...").props.value).toBe("");
+      expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe("");
     });
   });
 });
@@ -146,7 +146,7 @@ describe("preview debounce", () => {
 
   it("does nothing when the downloader has no getVideoInfo (native)", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1000);
@@ -158,7 +158,7 @@ describe("preview debounce", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "A Video", duration: 90, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     expect(screen.getByText("Suche Video…")).toBeTruthy();
 
@@ -174,7 +174,7 @@ describe("preview debounce", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "A Video", duration: 90, thumbnail: "https://example.com/thumb.jpg", uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -186,7 +186,7 @@ describe("preview debounce", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "A Video", duration: 90, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL123");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1000);
@@ -199,7 +199,7 @@ describe("preview debounce", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "A Video", duration: 90, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -213,7 +213,7 @@ describe("preview debounce", () => {
     const getVideoInfo = jest.fn().mockRejectedValue(new Error("nope"));
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -222,11 +222,32 @@ describe("preview debounce", () => {
     expect(screen.queryByText("A Video")).toBeNull();
   });
 
+  it("clears a stale preview when the url changes to one whose getVideoInfo rejects", async () => {
+    const getVideoInfo = jest
+      .fn()
+      .mockResolvedValueOnce({ title: "A Video", duration: 90, thumbnail: null, uploader: null })
+      .mockRejectedValueOnce(new Error("nope"));
+    mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://youtu.be/abc");
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(600);
+    });
+    await waitFor(() => expect(screen.getByText("A Video")).toBeTruthy());
+
+    await fireEvent.changeText(input, "https://example.com/unsupported");
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(600);
+    });
+    await waitFor(() => expect(screen.queryByText("A Video")).toBeNull());
+  });
+
   it("only fetches the final url when typed twice within the debounce window (stale-request guard)", async () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "Second", duration: 30, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/first");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
@@ -251,7 +272,7 @@ describe("preview debounce", () => {
     );
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     const { unmount } = await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -276,7 +297,7 @@ describe("handleConvert — single video", () => {
 
   it("submits the trimmed url and clears the input", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "  https://youtu.be/abc  ");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalled());
@@ -289,7 +310,7 @@ describe("handleConvert — single video", () => {
   it("shows the enqueue error message and re-enables the button", async () => {
     mockDownloader = makeDownloader({ enqueue: jest.fn().mockRejectedValue(new Error("Server down")) });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Server down")).toBeTruthy());
@@ -299,7 +320,7 @@ describe("handleConvert — single video", () => {
   it("shows a generic error message when enqueue throws a non-Error value", async () => {
     mockDownloader = makeDownloader({ enqueue: jest.fn().mockRejectedValue("boom") });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Herunterladen fehlgeschlagen.")).toBeTruthy());
@@ -311,7 +332,7 @@ describe("handleConvert — single video", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "Late Title", duration: 42, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await act(async () => {
@@ -327,7 +348,7 @@ describe("handleConvert — single video", () => {
     const updateJobPreview = jest.fn();
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -348,7 +369,7 @@ describe("handleConvert — single video", () => {
     const updateJobPreview = jest.fn();
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     // Pressed immediately, well before the 600ms debounce fires — no pending preview request exists.
     await fireEvent.press(screen.getByText("Herunterladen"));
@@ -358,7 +379,7 @@ describe("handleConvert — single video", () => {
 
   it("does not patch preview info when getVideoInfo/updateJobPreview are absent (native)", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalled());
@@ -369,7 +390,7 @@ describe("handleConvert — single video", () => {
     const getVideoInfo = jest.fn().mockResolvedValue({ title: "Matched", duration: 15, thumbnail: null, uploader: null });
     mockDownloader = makeDownloader({ getVideoInfo, updateJobPreview: jest.fn() });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/abc");
     await act(async () => {
       await jest.advanceTimersByTimeAsync(600);
@@ -386,7 +407,7 @@ describe("handleConvert — single video", () => {
 describe("handleConvert — batch queue (multi-line input)", () => {
   it("submits one job per line and clears the input", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/a\nhttps://youtu.be/b");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
@@ -397,7 +418,7 @@ describe("handleConvert — batch queue (multi-line input)", () => {
 
   it("ignores blank lines within the pasted block", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/a\n\n  \nhttps://youtu.be/b");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
@@ -405,7 +426,7 @@ describe("handleConvert — batch queue (multi-line input)", () => {
 
   it("skips a playlist line, submits the video lines, and shows a singular skip message", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtu.be/a\nhttps://youtube.com/playlist?list=PL1\nhttps://youtu.be/b");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledTimes(2));
@@ -419,7 +440,7 @@ describe("handleConvert — batch queue (multi-line input)", () => {
 
   it("uses the plural skip message for more than one skipped playlist line", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(
       input,
       "https://youtube.com/playlist?list=PL1\nhttps://youtu.be/a\nhttps://youtube.com/playlist?list=PL2"
@@ -432,7 +453,7 @@ describe("handleConvert — batch queue (multi-line input)", () => {
 
   it("shows an error and enqueues nothing when the batch is only playlist links", async () => {
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(
       input,
       "https://youtube.com/playlist?list=PL1\nhttps://youtube.com/playlist?list=PL2"
@@ -448,7 +469,7 @@ describe("handleConvert — playlist", () => {
     const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo());
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Video 1")).toBeTruthy());
@@ -459,7 +480,7 @@ describe("handleConvert — playlist", () => {
     const getPlaylistInfo = jest.fn().mockRejectedValue(new Error("Playlist kaputt"));
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Playlist kaputt")).toBeTruthy());
@@ -470,7 +491,7 @@ describe("handleConvert — playlist", () => {
     const getPlaylistInfo = jest.fn().mockRejectedValue("boom");
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Playlist konnte nicht geladen werden.")).toBeTruthy());
@@ -480,7 +501,7 @@ describe("handleConvert — playlist", () => {
     const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo({ entries: [], totalCount: 0 }));
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Abbrechen")).toBeTruthy());
@@ -499,7 +520,7 @@ describe("handleConvert — playlist", () => {
     );
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     // Not awaited: handleConvert is async and won't settle until getPlaylistInfo resolves below,
     // so awaiting this press would block on that still-pending promise.
@@ -520,7 +541,7 @@ describe("playlist picker interactions", () => {
   async function openPicker(getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo())) {
     mockDownloader = makeDownloader({ getPlaylistInfo });
     await render(<HomeScreen />);
-    const input = screen.getByPlaceholderText("https://www.youtube.com/watch?v=...");
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
     await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
     await fireEvent.press(screen.getByText("Herunterladen"));
     await waitFor(() => expect(screen.getByText("Video 1")).toBeTruthy());
