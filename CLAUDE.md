@@ -3,9 +3,11 @@
 pnpm monorepo with two workspaces:
 
 - `server/` — Express 5 + TypeScript API (ESM, run via `tsx`). Entry point
-  `server/src/index.ts`. Core download logic in `server/src/youtube.ts` shells
-  out to the external binaries `yt-dlp` and `ffmpeg` — both must be on `PATH`
-  for downloads to actually work (the `.claude/hooks/session-start.sh`
+  `server/src/index.ts`, routes in `server/src/app.ts`. Download logic is
+  split per platform under `server/src/platforms/` (YouTube, TikTok,
+  Instagram, Twitter/X, SoundCloud, Vimeo, Twitch), all shelling out to the
+  external binaries `yt-dlp` and `ffmpeg` — both must be on `PATH` for
+  downloads to actually work (the `.claude/hooks/session-start.sh`
   SessionStart hook installs them automatically in Claude Code on the web).
 - `app/` — Expo/React Native app (Expo SDK 57, React Native 0.86), including a
   native Android module at `app/modules/ytdlp`. **Expo has changed
@@ -21,7 +23,8 @@ pnpm monorepo with two workspaces:
 - `pnpm --filter server start` (`make start-server`) — run built server
 - `pnpm --filter app web` (`make dev-app`) — Expo web dev server, port 8081
 
-No lint or test tooling is configured in this repo.
+No lint tooling is configured in this repo. Tests: `pnpm --filter server test` (vitest) and
+`pnpm --filter app test` (jest), both enforcing 100% coverage thresholds.
 
 ## Versioning
 
