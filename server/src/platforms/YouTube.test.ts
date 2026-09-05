@@ -1,12 +1,17 @@
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const logWriteMock = vi.fn();
+
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("node:fs", () => ({
   default: {
     readdirSync: vi.fn().mockReturnValue([]),
+    statSync: vi.fn(),
+    unlinkSync: vi.fn(),
     mkdirSync: vi.fn(),
-    writeFileSync: vi.fn(),
+    createWriteStream: vi.fn(() => ({ write: logWriteMock, on: vi.fn() })),
+    existsSync: vi.fn().mockReturnValue(false),
   },
 }));
 
@@ -93,6 +98,11 @@ describe("defaultThumbnail", () => {
   });
 });
 
+/** Joins every line appended to the download log across all DownloadLogger calls made in a test. */
+function allLoggedContent(): string {
+  return logWriteMock.mock.calls.map(([content]) => content as string).join("");
+}
+
 describe("download", () => {
   it("propagates a non-retryable failure (sign-in gate) immediately without retrying, still writes the log", async () => {
     const infoChild = createFakeChild();
@@ -105,8 +115,7 @@ describe("download", () => {
     downloadChild.emit("close", 1);
     await expect(promise).rejects.toThrow("Sign in to confirm you're not a bot");
     expect(spawn).toHaveBeenCalledTimes(2); // info fetch + exactly one download attempt, no retry
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    const written = vi.mocked(fs.writeFileSync).mock.calls.at(-1)![1] as string;
-    expect(written).toContain("ERROR: ERROR: Sign in to confirm you're not a bot");
+    expect(fs.createWriteStream).toHaveBeenCalled(); // the log file is created up front
+    expect(allLoggedContent()).toContain("Sign in to confirm you're not a bot");
   });
 });

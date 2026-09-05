@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import express from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
@@ -273,6 +274,44 @@ describe("GET /api/download/:id", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toContain("audio.mp3");
     await vi.waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
+  });
+
+  it("responds 500 and keeps the file when the transfer errors before headers are sent", async () => {
+    const id = "44444444-4444-4444-4444-444444444444";
+    const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
+    fs.writeFileSync(filePath, "fake audio content");
+    const downloadSpy = vi
+      .spyOn(express.response, "download")
+      .mockImplementation(function (this: unknown, ..._args: unknown[]) {
+        (_args[2] as (err: Error) => void)(new Error("transfer failed"));
+      });
+
+    const res = await request(app).get(`/api/download/${id}`);
+
+    expect(res.status).toBe(500);
+    expect(fs.existsSync(filePath)).toBe(true);
+    downloadSpy.mockRestore();
+    fs.unlinkSync(filePath);
+  });
+
+  it("leaves the response alone when the transfer errors after headers were already sent", async () => {
+    const id = "55555555-5555-5555-5555-555555555555";
+    const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
+    fs.writeFileSync(filePath, "fake audio content");
+    const downloadSpy = vi
+      .spyOn(express.response, "download")
+      .mockImplementation(function (this: import("express").Response, ..._args: unknown[]) {
+        this.status(200).write("partial content");
+        (_args[2] as (err: Error) => void)(new Error("connection dropped mid-transfer"));
+        this.end();
+      });
+
+    const res = await request(app).get(`/api/download/${id}`);
+
+    expect(res.status).toBe(200);
+    expect(fs.existsSync(filePath)).toBe(true);
+    downloadSpy.mockRestore();
+    fs.unlinkSync(filePath);
   });
 
   it("falls back to 'download' as the filename when ?name= is omitted", async () => {

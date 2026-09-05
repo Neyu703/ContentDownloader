@@ -66,6 +66,10 @@ class YtdlpModule : Module() {
             DownloadQueue.cancel(id)
         }
 
+        AsyncFunction("removeIfFinished") { id: String ->
+            DownloadQueue.removeIfFinished(id)
+        }
+
         AsyncFunction("clearFinished") {
             DownloadQueue.clearFinished()
         }

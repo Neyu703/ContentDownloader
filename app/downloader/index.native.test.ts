@@ -252,6 +252,21 @@ describe("cancel", () => {
   });
 });
 
+describe("removeJob", () => {
+  it("fires Ytdlp.removeIfFinished and returns immediately without throwing", () => {
+    const downloader = freshDownloader();
+    expect(() => downloader.removeJob("job-1")).not.toThrow();
+    expect(mockYtdlp.removeIfFinished).toHaveBeenCalledWith("job-1");
+  });
+
+  it("swallows a rejection from Ytdlp.removeIfFinished", async () => {
+    mockYtdlp.removeIfFinished.mockRejectedValueOnce(new Error("nope"));
+    const downloader = freshDownloader();
+    expect(() => downloader.removeJob("job-1")).not.toThrow();
+    await flushPromises();
+  });
+});
+
 describe("clearFinished", () => {
   it("fires Ytdlp.clearFinished and returns immediately without throwing", () => {
     const downloader = freshDownloader();
@@ -310,6 +325,16 @@ describe("saveToDownloads", () => {
     expect(mockYtdlp.saveToDownloads).toHaveBeenCalledWith(
       "C:\\cache\\Song.mp3",
       "Song.mp3",
+      "audio/mpeg"
+    );
+  });
+
+  it("uses the sanitized override filename (keeping the real extension) when one is given", async () => {
+    const downloader = freshDownloader();
+    await downloader.saveToDownloads!(jobState({ result: "/cache/My Video.mp3", ext: "mp3" }), "Re/named:Title");
+    expect(mockYtdlp.saveToDownloads).toHaveBeenCalledWith(
+      "/cache/My Video.mp3",
+      "RenamedTitle.mp3",
       "audio/mpeg"
     );
   });

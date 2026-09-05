@@ -13,12 +13,18 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 /**
  * BasePlatform's behavior is generic across every non-playlist platform — exercised here through
  * TikTok (a plain BasePlatform subclass with no overrides) to prove that it really is generic and
  * not accidentally YouTube-specific. Mirrors server/src/platforms/BasePlatform.test.ts.
+ *
+ * org.json.JSONObject (used inside fetchMetadata's low-quality-title fallback) is a stub on the
+ * plain JVM; Robolectric provides a working shadow.
  */
+@RunWith(RobolectricTestRunner::class)
 class BasePlatformTest {
     private lateinit var engine: YtdlpEngine
 
@@ -36,6 +42,18 @@ class BasePlatformTest {
     private fun response(out: String) = YoutubeDLResponse(emptyList(), 0, 0L, out, "")
 
     private fun tiktok(url: String = "https://www.tiktok.com/@someuser/video/123") = TikTok(url)
+
+    // --- checkAvailability ---
+
+    @Test
+    fun `checkAvailability does not throw for a plain https URL`() {
+        tiktok("https://www.tiktok.com/@u/video/1").checkAvailability()
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `checkAvailability throws for a non-http s scheme`() {
+        tiktok("ftp://www.tiktok.com/@u/video/1").checkAvailability()
+    }
 
     // --- fetchMetadata ---
 
@@ -75,6 +93,51 @@ class BasePlatformTest {
         every { engine.execute(any(), any(), any(), null) } returns response("|||https://example.com/thumb.jpg")
 
         assertEquals(job.url, tiktok().fetchMetadata(job).title)
+    }
+
+    @Test
+    fun `fetchMetadata falls back to the caption when the fast title is a low-quality placeholder`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "320")
+        every { engine.execute(match { it.hasOption("--print") }, any(), any(), null) } returns
+            response("Video by dubisthalle|||NA")
+        every { engine.execute(match { it.hasOption("--dump-json") }, any(), any(), null) } returns
+            response("""{"description":"My trip to the mountains","uploader":"dubisthalle"}""")
+
+        val metadata = tiktok().fetchMetadata(job)
+
+        assertEquals("My trip to the mountains", metadata.title)
+    }
+
+    @Test
+    fun `fetchMetadata keeps the placeholder title when the dump-json fallback call yields nothing usable`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "320")
+        every { engine.execute(match { it.hasOption("--print") }, any(), any(), null) } returns
+            response("Video by dubisthalle|||NA")
+        every { engine.execute(match { it.hasOption("--dump-json") }, any(), any(), null) } returns response("   ")
+
+        assertEquals("Video by dubisthalle", tiktok().fetchMetadata(job).title)
+    }
+
+    // --- requestOptions ---
+
+    @Test
+    fun `requestOptions and buildRequest agree on the audio options`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "192")
+
+        val options = tiktok().requestOptions(job, "/out/%(ext)s")
+
+        assertEquals(
+            listOf(
+                "-f" to "bestaudio/best",
+                "-x" to null,
+                "--audio-format" to "mp3",
+                "--audio-quality" to "192K",
+                "--no-playlist" to null,
+                "--no-warnings" to null,
+                "-o" to "/out/%(ext)s"
+            ),
+            options
+        )
     }
 
     // --- buildRequest ---

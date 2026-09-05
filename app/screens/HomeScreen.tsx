@@ -238,13 +238,16 @@ export function HomeScreen() {
 
     // Sequential, not Promise.all: keeps job cards appearing in input order and avoids firing a
     // burst of simultaneous yt-dlp processes (same reasoning as confirmPlaylistDownload()).
+    let hadSubmitError = false;
     for (const targetUrl of videoLines) {
-      await submit(targetUrl, format, quality, null);
+      const jobId = await submit(targetUrl, format, quality, null);
+      if (!jobId) hadSubmitError = true;
     }
 
     // Set after the loop: each submit() call clears submitError at its start, so setting this
-    // beforehand would just get wiped out by the first job.
-    if (playlistLines.length > 0) {
+    // beforehand would just get wiped out by the first job. Skipped if a real submit failure
+    // already left its own message — that's the more important thing to surface.
+    if (playlistLines.length > 0 && !hadSubmitError) {
       setSubmitError(t("home.playlistLinksSkipped", { count: playlistLines.length }));
     }
   }
@@ -275,19 +278,21 @@ export function HomeScreen() {
     }
   }
 
-  async function handleShare(job: JobState) {
+  async function handleShare(job: JobState, filenameOverride?: string) {
     if (!job.result) return;
     setSharingId(job.id);
     try {
       if (Platform.OS === "web") {
-        window.location.href = job.result;
+        const name = sanitizeFilename(filenameOverride ?? job.title ?? "download");
+        const [downloadUrl] = job.result.split("?");
+        window.location.href = `${downloadUrl}?name=${encodeURIComponent(name)}`;
         return;
       }
       const fileUri = toFileUri(job.result);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: mimeTypeForExt(job.ext),
-          dialogTitle: sanitizeFilename(job.title ?? "download"),
+          dialogTitle: sanitizeFilename(filenameOverride ?? job.title ?? "download"),
         });
       }
     } finally {
@@ -367,7 +372,7 @@ export function HomeScreen() {
     if (!job.groupId) continue;
     const stats = groupStats.get(job.groupId) ?? { total: 0, done: 0 };
     stats.total += 1;
-    if (isFinishedPhase(job.phase)) stats.done += 1;
+    if (job.phase === "done") stats.done += 1;
     groupStats.set(job.groupId, stats);
   }
 
@@ -393,10 +398,17 @@ export function HomeScreen() {
         job={job}
         now={now}
         onCancel={() => downloader.cancel(job.id)}
-        onRetry={() => submit(job.url, job.format, job.quality, job)}
-        onShare={() => handleShare(job)}
+        onRetry={() => {
+          downloader.removeJob(job.id);
+          submit(job.url, job.format, job.quality, job);
+        }}
+        onShare={(filenameOverride) => handleShare(job, filenameOverride)}
         isSharing={sharingId === job.id}
-        onSave={downloader.saveToDownloads ? () => downloader.saveToDownloads!(job) : undefined}
+        onSave={
+          downloader.saveToDownloads
+            ? (filenameOverride) => downloader.saveToDownloads!(job, filenameOverride)
+            : undefined
+        }
       />
     );
   }

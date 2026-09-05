@@ -49,6 +49,7 @@ function makeDownloader(overrides: Record<string, unknown> = {}) {
     },
     enqueue: jest.fn().mockResolvedValue("job-1"),
     cancel: jest.fn(),
+    removeJob: jest.fn(),
     clearFinished: jest.fn(),
     getPlaylistInfo: jest.fn(),
     ...overrides,
@@ -476,6 +477,20 @@ describe("handleConvert — batch queue (multi-line input)", () => {
     );
   });
 
+  it("surfaces the last submit's real failure instead of the playlist-skip message", async () => {
+    // submit() clears any earlier error at the start of each call, so only the *last* video
+    // line's outcome can still be visible once the loop finishes — put the failure there.
+    mockDownloader = makeDownloader({
+      enqueue: jest.fn().mockResolvedValueOnce("job-1").mockRejectedValueOnce(new Error("Video nicht verfügbar")),
+    });
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://youtu.be/a\nhttps://youtube.com/playlist?list=PL1\nhttps://youtu.be/b");
+    await fireEvent.press(screen.getByText("Herunterladen"));
+    await waitFor(() => expect(screen.getByText("Video nicht verfügbar")).toBeTruthy());
+    expect(screen.queryByText("1 Playlist-Link übersprungen — bitte einzeln einfügen.")).toBeNull();
+  });
+
   it("uses the plural skip message for more than one skipped playlist line", async () => {
     await render(<HomeScreen />);
     const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
@@ -814,6 +829,18 @@ describe("handleShare", () => {
     expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
   });
 
+  it("uses the edited filename as the native share dialogTitle when the title field was changed", async () => {
+    (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+    (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
+    await render(<HomeScreen />);
+    await mockDownloader.push([finishedJob()]);
+    await fireEvent.changeText(screen.getByLabelText("Dateiname"), "Renamed Song");
+    await fireEvent.press(screen.getByText("MP3 herunterladen"));
+    await waitFor(() =>
+      expect(Sharing.shareAsync).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ dialogTitle: "Renamed Song" }))
+    );
+  });
+
   it("falls back to 'download' as the dialog title when the job has no title", async () => {
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
@@ -831,8 +858,33 @@ describe("handleShare", () => {
     await render(<HomeScreen />);
     await mockDownloader.push([finishedJob()]);
     await fireEvent.press(screen.getByText("MP3 herunterladen"));
-    expect((globalThis as { window: { location: { href: string } } }).window.location.href).toBe("/cache/song.mp3");
+    expect((globalThis as { window: { location: { href: string } } }).window.location.href).toBe(
+      "/cache/song.mp3?name=My%20Song"
+    );
     expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
+  });
+
+  it("falls back to 'download' as the query name on web when the job has no title and no override", async () => {
+    Platform.OS = "web";
+    (globalThis as { window?: { location?: { href?: string } } }).window = { location: { href: "" } };
+    await render(<HomeScreen />);
+    await mockDownloader.push([finishedJob({ title: null })]);
+    await fireEvent.press(screen.getByText("MP3 herunterladen"));
+    expect((globalThis as { window: { location: { href: string } } }).window.location.href).toBe(
+      "/cache/song.mp3?name=download"
+    );
+  });
+
+  it("uses the edited filename in the web download URL when the title field was changed", async () => {
+    Platform.OS = "web";
+    (globalThis as { window?: { location?: { href?: string } } }).window = { location: { href: "" } };
+    await render(<HomeScreen />);
+    await mockDownloader.push([finishedJob()]);
+    await fireEvent.changeText(screen.getByLabelText("Dateiname"), "Renamed Song");
+    await fireEvent.press(screen.getByText("MP3 herunterladen"));
+    expect((globalThis as { window: { location: { href: string } } }).window.location.href).toBe(
+      "/cache/song.mp3?name=Renamed%20Song"
+    );
   });
 
   it("shares a file:// prefixed path unchanged when sharing is available", async () => {
@@ -882,7 +934,17 @@ describe("job save (native onSave wiring)", () => {
     await render(<HomeScreen />);
     await mockDownloader.push([makeJob({ phase: "done", result: "/cache/song.mp3", ext: "mp3" })]);
     await fireEvent.press(screen.getByText("MP3 speichern"));
-    await waitFor(() => expect(saveToDownloads).toHaveBeenCalled());
+    await waitFor(() => expect(saveToDownloads).toHaveBeenCalledWith(expect.anything(), undefined));
+  });
+
+  it("passes the edited filename through to saveToDownloads when the title field was changed", async () => {
+    const saveToDownloads = jest.fn().mockResolvedValue(undefined);
+    mockDownloader = makeDownloader({ saveToDownloads });
+    await render(<HomeScreen />);
+    await mockDownloader.push([makeJob({ phase: "done", result: "/cache/song.mp3", ext: "mp3" })]);
+    await fireEvent.changeText(screen.getByLabelText("Dateiname"), "Renamed Song");
+    await fireEvent.press(screen.getByText("MP3 speichern"));
+    await waitFor(() => expect(saveToDownloads).toHaveBeenCalledWith(expect.anything(), "Renamed Song"));
   });
 });
 

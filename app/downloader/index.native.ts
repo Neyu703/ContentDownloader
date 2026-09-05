@@ -1,7 +1,7 @@
 import { AppState } from "react-native";
 import Ytdlp, { type NativeJob, type NativeState } from "../modules/ytdlp";
 import type { Downloader, DownloadRequest, JobState, SetupState } from "./types";
-import { mimeTypeForExt, toFileUri } from "../lib/format";
+import { mimeTypeForExt, sanitizeFilename, toFileUri } from "../lib/format";
 
 function toJobState(job: NativeJob): JobState {
   return {
@@ -103,6 +103,11 @@ export const downloader: Downloader = {
     Ytdlp.cancel(id).catch(() => {});
   },
 
+  removeJob(id: string) {
+    // Same fire-and-forget reasoning as cancel() above.
+    Ytdlp.removeIfFinished(id).catch(() => {});
+  },
+
   clearFinished() {
     // Same fire-and-forget reasoning as cancel() above.
     Ytdlp.clearFinished().catch(() => {});
@@ -113,12 +118,16 @@ export const downloader: Downloader = {
     return toFileUri(path);
   },
 
-  async saveToDownloads(job: JobState) {
+  async saveToDownloads(job: JobState, filenameOverride?: string) {
     if (!job.result) return;
     // The native side already renamed the file to a sanitized "<video title>.<ext>" — reuse that
-    // instead of re-deriving a filename here. split() on a non-empty string (guaranteed by the
-    // guard above) always yields at least one element, so pop() can never be undefined.
-    const filename = job.result.split(/[\\/]/).pop()!;
+    // instead of re-deriving a filename here, unless the user typed their own name first. split()
+    // on a non-empty string (guaranteed by the guard above) always yields at least one element, so
+    // pop() can never be undefined.
+    const autoFilename = job.result.split(/[\\/]/).pop()!;
+    const filename = filenameOverride
+      ? `${sanitizeFilename(filenameOverride)}.${autoFilename.split(".").pop()}`
+      : autoFilename;
     await Ytdlp.saveToDownloads(job.result, filename, mimeTypeForExt(job.ext));
   },
 

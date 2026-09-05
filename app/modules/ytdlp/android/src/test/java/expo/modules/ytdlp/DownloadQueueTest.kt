@@ -51,6 +51,7 @@ class DownloadQueueTest {
         privateField("ytdlpVersion").set(DownloadQueue, null)
         @Suppress("UNCHECKED_CAST")
         (privateField("_revision").get(DownloadQueue) as MutableStateFlow<Long>).value = 0L
+        (DebugLog::class.java.getDeclaredField("lines").apply { isAccessible = true }.get(DebugLog) as ArrayDeque<*>).clear()
     }
 
     private fun privateField(name: String) =
@@ -310,6 +311,34 @@ class DownloadQueueTest {
         assertEquals(listOf("c"), remaining)
     }
 
+    // --- removeIfFinished() ---
+
+    @Test
+    fun `removeIfFinished is a no-op for an unknown id`() {
+        DownloadQueue.removeIfFinished("does-not-exist")
+        assertTrue((DownloadQueue.snapshot()["jobs"] as List<*>).isEmpty())
+    }
+
+    @Test
+    fun `removeIfFinished leaves an active (not yet finished) job untouched`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        seedJob(job)
+
+        DownloadQueue.removeIfFinished("id-1")
+
+        assertEquals(1, (DownloadQueue.snapshot()["jobs"] as List<*>).size)
+    }
+
+    @Test
+    fun `removeIfFinished removes a finished job`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320").apply { phase = JobPhase.DONE }
+        seedJob(job)
+
+        DownloadQueue.removeIfFinished("id-1")
+
+        assertTrue((DownloadQueue.snapshot()["jobs"] as List<*>).isEmpty())
+    }
+
     // --- clearFinished() ---
 
     @Test
@@ -420,6 +449,7 @@ class DownloadQueueTest {
         assertNotNull(job.filePath)
         assertTrue(File(job.filePath!!).name.startsWith("My Video Title"))
         assertNotNull(job.finishedAt)
+        assertTrue(DebugLog.snapshot().contains("RESULT job=id-1: SUCCESS"))
     }
 
     @Test
@@ -436,6 +466,25 @@ class DownloadQueueTest {
 
         assertEquals(JobPhase.DONE, job.phase)
         assertEquals("mp4", job.ext)
+    }
+
+    @Test
+    fun `runJob deletes the produced file and skips DONE when cancelled during the download itself`() = runTest {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("A Title")
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
+            val request = firstArg<YoutubeDLRequest>()
+            File(request.getOption("-o")!!.replace("%(ext)s", "mp3")).apply { writeText("audio-bytes") }
+            // cancel() flips the phase directly; runJob must notice this once downloadWithRetry returns.
+            job.phase = JobPhase.CANCELLED
+            response("")
+        }
+
+        DownloadQueue.runJob(context, job)
+
+        assertEquals(JobPhase.CANCELLED, job.phase)
+        assertNotNull(job.filePath)
+        assertFalse(File(job.filePath!!).exists())
     }
 
     @Test
@@ -528,6 +577,9 @@ class DownloadQueueTest {
         assertEquals("errors.raw", job.error)
         assertEquals(mapOf("raw" to "HTTP Error 403: Forbidden"), job.errorParams)
         verify(exactly = 3) { engine.execute(any(), any(), any(), isNull(inverse = true)) }
+        val logged = DebugLog.snapshot()
+        assertTrue(logged.contains("attempt 1/3 failed"))
+        assertTrue(logged.contains("RESULT job=id-1: FAILED"))
     }
 
     @Test
@@ -628,6 +680,23 @@ class DownloadQueueTest {
         assertTrue(File(job.filePath!!).name.contains("youtu.be"))
     }
 
+    @Test
+    fun `downloadAndFinalize logs a reproducible yt-dlp command to DebugLog`() {
+        val job = DownloadJob("id-1", "https://youtu.be/my-video-id", "audio", "320")
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
+            val request = firstArg<YoutubeDLRequest>()
+            File(request.getOption("-o")!!.replace("%(ext)s", "mp3")).apply { writeText("audio-bytes") }
+            response("")
+        }
+        val outputDir = File(context.cacheDir, "download-finalize-test-${System.nanoTime()}").apply { mkdirs() }
+
+        DownloadQueue.downloadAndFinalize(YouTube(job.url), job, outputDir, "mp3")
+
+        val logged = DebugLog.snapshot()
+        assertTrue(logged.contains("job id-1: command: yt-dlp -f bestaudio/best -x --audio-format mp3"))
+        assertTrue(logged.contains(job.url))
+    }
+
     // buildRequest() moved onto Platform instances — see platforms/BasePlatformTest.kt.
 
     // --- onOutput() ---
@@ -701,6 +770,24 @@ class DownloadQueueTest {
 
         assertEquals("job.retrying", job.lastLineKey)
         assertEquals(mapOf("attempt" to 2, "maxAttempts" to 3), job.lastLineParams)
+    }
+
+    @Test
+    fun `onOutput forwards every non-blank line to DebugLog, not just phase-changing ones`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+
+        DownloadQueue.onOutput(job, 42f, 10L, "[download] 42% of 10MiB")
+
+        assertTrue(DebugLog.snapshot().contains("job id-1: [download] 42% of 10MiB"))
+    }
+
+    @Test
+    fun `onOutput does not log a blank line to DebugLog`() {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+
+        DownloadQueue.onOutput(job, 0f, 0L, "   ")
+
+        assertFalse(DebugLog.snapshot().contains("job id-1:"))
     }
 
     @Test

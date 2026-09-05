@@ -7,6 +7,10 @@ export interface VideoInfo {
   duration: number;
   thumbnail: string | null;
   uploader: string | null;
+  /** yt-dlp's upload_date (YYYYMMDD), kept for the download log's INFO section. */
+  uploadDate: string | null;
+  /** yt-dlp's own video id, kept for the download log's INFO section and as a last-resort title fallback. */
+  videoId: string | null;
 }
 
 export interface ConvertResult {

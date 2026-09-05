@@ -67,6 +67,8 @@ declare class NativeYtdlp extends NativeModule<YtdlpEvents> {
   ): Promise<string>;
   getPlaylistInfo(url: string, start: number): Promise<NativePlaylistInfo>;
   cancel(id: string): Promise<void>;
+  /** Dismisses a single finished (done/error/cancelled) job. No-op for an active job. */
+  removeIfFinished(id: string): Promise<void>;
   clearFinished(): Promise<void>;
   /** Writes the current log to a cache file and returns its absolute (non-URI) path. */
   getDebugLogFile(): Promise<string>;

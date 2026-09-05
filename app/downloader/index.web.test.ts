@@ -487,6 +487,33 @@ describe("cancel", () => {
   });
 });
 
+describe("removeJob", () => {
+  it("no-ops cleanly when called for an id that was never polling (stopPolling's false branch)", () => {
+    const downloader = freshDownloader();
+    expect(() => downloader.removeJob("never-existed")).not.toThrow();
+  });
+
+  it("stops polling, removes the job, and notifies", async () => {
+    const downloader = freshDownloader();
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
+      .mockResolvedValueOnce(jsonResponse({ jobId: "job-1" }));
+    await downloader.enqueue({ url: "u", format: "audio", quality: "320" });
+    const listener = jest.fn();
+    downloader.subscribe(listener);
+    listener.mockClear();
+
+    downloader.removeJob("job-1");
+    expect(listener).toHaveBeenCalledWith([], expect.anything());
+
+    // Confirms polling really stopped: no further fetch calls even after the poll interval passes.
+    jest.mocked(fetch).mockClear();
+    await jest.advanceTimersByTimeAsync(1200);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe("clearFinished", () => {
   it("removes only done/error/cancelled jobs, keeps active ones, notifies once", async () => {
     const downloader = freshDownloader();

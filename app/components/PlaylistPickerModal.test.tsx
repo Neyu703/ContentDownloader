@@ -20,7 +20,7 @@ const ENTRIES: PlaylistEntry[] = [
 function makePicker(overrides: Partial<PlaylistPickerViewState> = {}): PlaylistPickerViewState {
   return {
     info: { title: "My Playlist", entries: ENTRIES, totalCount: null },
-    selected: new Set(["a", "b"]),
+    selected: new Set([0, 1]),
     isLoadingMore: false,
     ...overrides,
   };
@@ -56,7 +56,7 @@ describe("PlaylistPickerModal", () => {
   });
 
   it("shows 'Alle auswählen' when not everything is selected", async () => {
-    await render(<PlaylistPickerModal picker={makePicker({ selected: new Set(["a"]) })} format="audio" {...NOOP_HANDLERS} />);
+    await render(<PlaylistPickerModal picker={makePicker({ selected: new Set([0]) })} format="audio" {...NOOP_HANDLERS} />);
     expect(screen.getByText("Alle auswählen")).toBeTruthy();
   });
 
@@ -73,7 +73,7 @@ describe("PlaylistPickerModal", () => {
     expect(screen.getByText("Video A")).toBeTruthy();
     expect(screen.getByText("Video B")).toBeTruthy();
     await fireEvent.press(screen.getByText("Video A"));
-    expect(onToggleEntry).toHaveBeenCalledWith("a");
+    expect(onToggleEntry).toHaveBeenCalledWith(0);
   });
 
   it("calls onLoadMore on end reached", async () => {

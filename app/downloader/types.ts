@@ -72,14 +72,20 @@ export interface Downloader {
   subscribe(listener: (jobs: JobState[], setup: SetupState) => void): () => void;
   enqueue(request: DownloadRequest): Promise<string>;
   cancel(id: string): void;
+  /** Dismisses a single finished (done/error/cancelled) job, e.g. right before retrying it. No-op for an active job. */
+  removeJob(id: string): void;
   clearFinished(): void;
   /**
    * Native only — writes a rolling log of phase transitions and full stack traces to a cache
    * file for bug reports and returns its file:// URI.
    */
   getDebugLogFileUri?(): Promise<string>;
-  /** Native only — copies a finished job's file into the device's public Downloads folder (or the folder picked via pickDownloadsFolder(), if any). */
-  saveToDownloads?(job: JobState): Promise<void>;
+  /**
+   * Native only — copies a finished job's file into the device's public Downloads folder (or the
+   * folder picked via pickDownloadsFolder(), if any). `filenameOverride`, when given, replaces the
+   * auto-picked title as the saved file's base name (still passed through sanitizeFilename()).
+   */
+  saveToDownloads?(job: JobState, filenameOverride?: string): Promise<void>;
   /** Native only — opens Android's folder picker; returns the picked folder's display name, or null if the user cancelled. */
   pickDownloadsFolder?(): Promise<string | null>;
   /** Native only — the currently picked folder's display name, or null when using the default public Downloads folder. */

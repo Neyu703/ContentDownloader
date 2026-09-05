@@ -35,17 +35,34 @@ function checkFfmpeg(): Promise<boolean> {
   });
 }
 
+// Cached at startup by checkEnvironment() so every download log can stamp its own yt-dlp/ffmpeg
+// versions without re-invoking either binary per job.
+let cachedYtDlpVersion: string | null = null;
+let cachedFfmpegAvailable: boolean | null = null;
+
+/** The yt-dlp version detected at startup, or null if it couldn't be determined yet/at all. */
+export function getYtDlpVersion(): string | null {
+  return cachedYtDlpVersion;
+}
+
+/** Whether ffmpeg was found on PATH at startup, or null if that check hasn't run yet. */
+export function isFfmpegAvailable(): boolean | null {
+  return cachedFfmpegAvailable;
+}
+
 // Surfaces broken pieces of the download chain (yt-dlp, ffmpeg, PO-token script) at startup
 // instead of only as a cryptic error deep inside a job.
 export async function checkEnvironment(): Promise<void> {
   try {
     const version = await runYtDlp(["--version"]);
-    console.log(`yt-dlp Version: ${version.trim()}`);
+    cachedYtDlpVersion = version.trim();
+    console.log(`yt-dlp Version: ${cachedYtDlpVersion}`);
   } catch (err) {
     console.warn("WARNUNG: yt-dlp nicht erreichbar:", errorMessage(err));
   }
 
-  if (!(await checkFfmpeg())) {
+  cachedFfmpegAvailable = await checkFfmpeg();
+  if (!cachedFfmpegAvailable) {
     console.warn("WARNUNG: ffmpeg wurde nicht gefunden (PATH?). MP3/MP4-Konvertierung wird fehlschlagen.");
   }
 

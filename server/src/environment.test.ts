@@ -10,7 +10,7 @@ vi.mock("node:fs", () => ({
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { updateYtDlp, checkEnvironment } from "./environment.js";
+import { updateYtDlp, checkEnvironment, getYtDlpVersion, isFfmpegAvailable } from "./environment.js";
 
 /** A minimal fake ChildProcess: stdout/stderr are EventEmitters, plus its own "error"/"close" events. */
 function createFakeChild() {
@@ -89,6 +89,8 @@ describe("checkEnvironment", () => {
 
     expect(logSpy).toHaveBeenCalledWith("yt-dlp Version: 2026.01.01");
     expect(warnSpy).not.toHaveBeenCalled();
+    expect(getYtDlpVersion()).toBe("2026.01.01");
+    expect(isFfmpegAvailable()).toBe(true);
   });
 
   it("warns when the yt-dlp version check fails with an Error", async () => {
@@ -136,6 +138,7 @@ describe("checkEnvironment", () => {
     await promise;
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("ffmpeg wurde nicht gefunden"));
+    expect(isFfmpegAvailable()).toBe(false);
   });
 
   it("warns when ffmpeg spawn itself errors", async () => {

@@ -43,6 +43,7 @@ export const en: typeof de = {
   jobCard: {
     detailsCollapse: "Collapse details",
     detailsExpand: "Expand details",
+    renameAccessibilityLabel: "Filename",
     alreadySavedTitle: "Already saved",
     alreadySavedBody: "This file is already in Downloads. Saving again creates another copy.",
     alreadySavedCancel: "Cancel",
@@ -136,6 +137,8 @@ export const en: typeof de = {
     videoInfoFailed: "Couldn't load video information.",
     playlistInfoFailed: "Couldn't load the playlist.",
     signInRequired: "This video requires signing in to YouTube and can't be downloaded.",
+    instagramSlideshowNotSupported:
+      "Instagram slideshow posts (multiple photos) can't be downloaded — only single-video posts are supported.",
     raw: "{{raw}}",
     unknown: "Unknown error.",
     serverUnreachable: "Server unreachable at {{serverUrl}}",

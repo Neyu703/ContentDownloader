@@ -44,6 +44,7 @@ export const de = {
   jobCard: {
     detailsCollapse: "Details einklappen",
     detailsExpand: "Details ausklappen",
+    renameAccessibilityLabel: "Dateiname",
     alreadySavedTitle: "Bereits gespeichert",
     alreadySavedBody: "Diese Datei liegt schon in Downloads. Nochmal speichern legt eine weitere Kopie an.",
     alreadySavedCancel: "Abbrechen",
@@ -137,6 +138,8 @@ export const de = {
     videoInfoFailed: "Video-Informationen konnten nicht geladen werden.",
     playlistInfoFailed: "Playlist konnte nicht geladen werden.",
     signInRequired: "Dieses Video verlangt eine YouTube-Anmeldung und kann nicht heruntergeladen werden.",
+    instagramSlideshowNotSupported:
+      "Instagram-Slideshow-Beiträge (mehrere Fotos) können nicht heruntergeladen werden — nur Beiträge mit einem Video werden unterstützt.",
     raw: "{{raw}}",
     unknown: "Unbekannter Fehler.",
     serverUnreachable: "Server nicht erreichbar unter {{serverUrl}}",

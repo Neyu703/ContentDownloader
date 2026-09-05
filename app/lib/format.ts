@@ -81,8 +81,8 @@ export function generateGroupId(): string {
 }
 
 // A video can legitimately appear more than once in the same YouTube playlist (re-added), so
-// entry ids aren't guaranteed unique — comparing selected.size against entries.length would
-// wrongly report "not all selected" whenever a duplicate id collapses the Set below the entry count.
-export function isAllPlaylistEntriesSelected(picker: { info: PlaylistInfo; selected: Set<string> }): boolean {
-  return picker.info.entries.every((entry) => picker.selected.has(entry.id));
+// entry ids aren't guaranteed unique — selection is keyed by entry index instead, otherwise a
+// duplicate id would collapse two distinct entries onto one Set entry.
+export function isAllPlaylistEntriesSelected(picker: { info: PlaylistInfo; selected: Set<number> }): boolean {
+  return picker.info.entries.every((_, index) => picker.selected.has(index));
 }

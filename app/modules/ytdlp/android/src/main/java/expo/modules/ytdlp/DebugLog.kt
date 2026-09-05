@@ -6,12 +6,15 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-private const val MAX_LINES = 500
+// Large enough to hold several full jobs' raw yt-dlp transcripts (every output line, not just
+// phase transitions) at once — a single job's output is typically well under 1000 lines.
+private const val MAX_LINES = 5000
 
 /**
- * In-memory ring buffer capturing setup/job phase transitions and full stack traces, so a crash
- * or a stuck download can be sent back as one readable report instead of debugged blind — there is
- * no way to pull logcat from a device that only Herbert (not this laptop) has physical access to.
+ * In-memory ring buffer capturing setup/job phase transitions, every raw yt-dlp output line, and
+ * full stack traces, so a crash or a stuck download can be sent back as one complete, traceable
+ * report instead of debugged blind — there is no way to pull logcat from a device that only
+ * Herbert (not this laptop) has physical access to.
  */
 object DebugLog {
     private val lines = ArrayDeque<String>()

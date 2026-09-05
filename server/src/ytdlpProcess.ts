@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
  */
 function makeChunkHandler(accumulate: (text: string) => void, onLine?: (line: string) => void, linePrefix = "") {
   let lineBuffer = "";
-  return (chunk: Buffer) => {
+  const handleChunk = (chunk: Buffer) => {
     const text = chunk.toString();
     accumulate(text);
     if (!onLine) return;
@@ -17,6 +17,13 @@ function makeChunkHandler(accumulate: (text: string) => void, onLine?: (line: st
     lineBuffer = lines.pop()!;
     for (const line of lines) onLine(linePrefix + line);
   };
+  // Flushes a trailing, not-yet-newline-terminated line once the stream closes — otherwise a final
+  // line with no trailing "\n" (e.g. the process was killed mid-line) is silently dropped.
+  handleChunk.flush = () => {
+    if (onLine && lineBuffer) onLine(linePrefix + lineBuffer);
+    lineBuffer = "";
+  };
+  return handleChunk;
 }
 
 /** Runs yt-dlp with the given CLI args, resolving with stdout on exit code 0, rejecting with stderr otherwise. */
@@ -26,17 +33,15 @@ export function runYtDlp(args: string[], onLine?: (line: string) => void): Promi
 
     let stdout = "";
     let stderr = "";
-    child.stdout.on(
-      "data",
-      makeChunkHandler((text) => (stdout += text), onLine)
-    );
-    child.stderr.on(
-      "data",
-      makeChunkHandler((text) => (stderr += text), onLine, "[stderr] ")
-    );
+    const stdoutHandler = makeChunkHandler((text) => (stdout += text), onLine);
+    const stderrHandler = makeChunkHandler((text) => (stderr += text), onLine, "[stderr] ");
+    child.stdout.on("data", stdoutHandler);
+    child.stderr.on("data", stderrHandler);
 
     child.on("error", (err) => reject(err));
     child.on("close", (code) => {
+      stdoutHandler.flush();
+      stderrHandler.flush();
       if (code === 0) resolve(stdout);
       else reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
     });

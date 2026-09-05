@@ -1,10 +1,12 @@
+import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { errorMessage } from "../utils.js";
-import { writeLog } from "../downloadLog.js";
-import { DOWNLOADS_DIR } from "../environment.js";
+import { DownloadLogger } from "../downloadLog.js";
+import { DOWNLOADS_DIR, getYtDlpVersion, isFfmpegAvailable } from "../environment.js";
 import { runYtDlp } from "../ytdlpProcess.js";
 import { parseProgressLine, type ProgressUpdate } from "../progress.js";
+import { pickTitle } from "./titleQuality.js";
 import type { ConvertResult, MediaFormat, Platform, UserFacingError, VideoInfo } from "./Platform.js";
 
 /** Total download attempts per job (including the first try) before a transient failure gives up. */
@@ -31,16 +33,29 @@ export abstract class BasePlatform implements Platform {
     }
   }
 
+  /** The exact yt-dlp argv used for a metadata-only lookup, shared by fetchInfo() and its download-log entry. */
+  private infoArgs(): string[] {
+    return ["--dump-json", "--no-playlist", "--no-warnings", "--no-plugin-dirs", this.url];
+  }
+
   async fetchInfo(): Promise<VideoInfo> {
     // Metadata only (no format URLs needed here), so skip the PO-token provider plugin — it checks
     // Node/Deno availability on every yt-dlp invocation, which alone costs ~7-10s.
-    const stdout = await runYtDlp(["--dump-json", "--no-playlist", "--no-warnings", "--no-plugin-dirs", this.url]);
+    const stdout = await runYtDlp(this.infoArgs());
     const data = JSON.parse(stdout);
     return {
-      title: data.title ?? "Unknown title",
+      title: pickTitle({
+        title: data.title,
+        description: data.description,
+        uploader: data.uploader,
+        uploadDate: data.upload_date,
+        id: data.id,
+      }),
       duration: data.duration ?? 0,
       thumbnail: data.thumbnail ?? null,
       uploader: data.uploader ?? null,
+      uploadDate: data.upload_date ?? null,
+      videoId: data.id ?? null,
     };
   }
 
@@ -76,20 +91,43 @@ export abstract class BasePlatform implements Platform {
     return { key: "errors.raw", params: { raw: errorMessage(err, fallbackRaw) } };
   }
 
+  /** Formats an elapsed duration since `startedAt` (ms epoch) as e.g. "1.8s". */
+  private static elapsedSince(startedAt: number): string {
+    return `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
+  }
+
+  /** Best-effort file size in MB for the RESULT log line; "unknown" if the file can't be stat'd. */
+  private static fileSizeMB(filePath: string): string {
+    try {
+      return fs.existsSync(filePath) ? (fs.statSync(filePath).size / (1024 * 1024)).toFixed(2) : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
   async download(
     format: MediaFormat,
     quality: string,
     onProgress: (update: ProgressUpdate) => void
   ): Promise<ConvertResult> {
     const id = randomUUID();
-    const logLines: string[] = [];
-    const log = (message: string) => logLines.push(`[${new Date().toISOString()}] ${message}`);
-    log(`start url=${this.url} format=${format} quality=${quality}`);
+    const logger = new DownloadLogger(id);
+    const startedAt = Date.now();
+
+    logger.section(`DOWNLOAD job=${id} platform=${this.id}`);
+    logger.line(`url=${this.url} format=${format} quality=${quality}`);
+    logger.line(`yt-dlp=${getYtDlpVersion() ?? "unknown"} ffmpeg=${isFfmpegAvailable() ? "available" : "unavailable"}`);
 
     try {
       onProgress({ stage: "fetching_info", messageKey: "job.fetchingInfo", progress: null });
+      logger.section("FETCH INFO");
+      logger.command(this.infoArgs());
+      const infoStartedAt = Date.now();
       const info = await this.fetchInfo();
-      log(`video info: title="${info.title}" duration=${info.duration}`);
+      logger.line(`resolved in ${BasePlatform.elapsedSince(infoStartedAt)}`);
+      logger.line(
+        `title="${info.title}" uploader=${info.uploader ?? "null"} uploadDate=${info.uploadDate ?? "null"} id=${info.videoId ?? "null"} duration=${info.duration}`
+      );
 
       const outputTemplate = path.join(DOWNLOADS_DIR, `${id}.%(ext)s`);
       const ext: ConvertResult["ext"] = format === "audio" ? "mp3" : "mp4";
@@ -101,22 +139,18 @@ export abstract class BasePlatform implements Platform {
         outputTemplate,
         this.url,
       ];
-      log(`yt-dlp args: ${downloadArgs.join(" ")}`);
 
-      await this.downloadWithRetry(downloadArgs, format, info.title, onProgress, log);
+      await this.downloadWithRetry(downloadArgs, format, info.title, onProgress, logger);
 
-      log("finished successfully");
-      return {
-        id,
-        filePath: path.join(DOWNLOADS_DIR, `${id}.${ext}`),
-        title: info.title,
-        ext,
-      };
+      const filePath = path.join(DOWNLOADS_DIR, `${id}.${ext}`);
+      const sizeMB = BasePlatform.fileSizeMB(filePath);
+      logger.section("RESULT");
+      logger.line(`SUCCESS after ${BasePlatform.elapsedSince(startedAt)} total, file=${filePath} size=${sizeMB}MB`);
+      return { id, filePath, title: info.title, ext };
     } catch (err) {
-      log(`ERROR: ${errorMessage(err)}`);
+      logger.section("RESULT");
+      logger.line(`FAILED after ${BasePlatform.elapsedSince(startedAt)} total: ${errorMessage(err)}`);
       throw err;
-    } finally {
-      writeLog(id, logLines);
     }
   }
 
@@ -129,9 +163,11 @@ export abstract class BasePlatform implements Platform {
     format: MediaFormat,
     title: string,
     onProgress: (update: ProgressUpdate) => void,
-    log: (message: string) => void
+    logger: DownloadLogger
   ): Promise<void> {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      logger.section(`DOWNLOAD ATTEMPT ${attempt}/${MAX_ATTEMPTS}`);
+      logger.command(downloadArgs);
       onProgress(
         attempt === 1
           ? { stage: "downloading", messageKey: "job.downloadingTitled", messageParams: { title }, progress: 0 }
@@ -143,15 +179,16 @@ export abstract class BasePlatform implements Platform {
             }
       );
 
+      const attemptStartedAt = Date.now();
       try {
         await runYtDlp(downloadArgs, (line) => {
-          log(line);
+          logger.line(line);
           const update = parseProgressLine(line, format);
           if (update) onProgress(update);
         });
         return;
       } catch (err) {
-        log(`attempt ${attempt}/${MAX_ATTEMPTS} failed: ${errorMessage(err)}`);
+        logger.line(`attempt ${attempt}/${MAX_ATTEMPTS} failed after ${BasePlatform.elapsedSince(attemptStartedAt)}: ${errorMessage(err)}`);
         if (attempt >= MAX_ATTEMPTS || !this.isRetryableError(err)) throw err;
         await delay(RETRY_DELAY_MS);
       }

@@ -163,6 +163,12 @@ app.get("/api/download/:id", (req, res) => {
 
   const downloadName = sanitizeFilename(String(req.query.name ?? "download")) + ext;
   res.download(filePath, downloadName, (err) => {
+    if (err) {
+      // Client aborted mid-transfer, or the read failed — leave the file in place so a retry can
+      // still succeed, and finish the response ourselves (res.download won't on error).
+      if (!res.headersSent) res.status(500).json({ errorKey: "errors.unknown" });
+      return;
+    }
     fs.unlink(filePath, () => {});
   });
 });

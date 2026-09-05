@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Easing, Image, Pressable, Text, View } from "react-native";
+import { Alert, Animated, Easing, Image, Pressable, Text, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { type JobState } from "../downloader/types";
 import {
@@ -32,14 +32,17 @@ export function JobCard({
   now: number;
   onCancel: () => void;
   onRetry: () => void;
-  onShare: () => void;
+  /** `filenameOverride` is set once the user edits the title field below, before it's finished (see `customName`). */
+  onShare: (filenameOverride?: string) => void;
   isSharing: boolean;
   /** Native only — omitted entirely on web, where the single button already saves via the browser. */
-  onSave?: () => Promise<void>;
+  onSave?: (filenameOverride?: string) => Promise<void>;
 }) {
   const styles = useStyles();
   const { t } = useTranslation();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // User-edited filename for a finished job, overriding the auto-picked title — null until touched.
+  const [customName, setCustomName] = useState<string | null>(null);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [debugBoxHeight, setDebugBoxHeight] = useState(0);
   const detailsAnim = useRef(new Animated.Value(1)).current;
@@ -86,7 +89,7 @@ export function JobCard({
   async function doSave() {
     setSaveState("saving");
     try {
-      await onSave!();
+      await onSave!(customName ?? undefined);
       setSaveState("saved");
     } catch {
       setSaveState("error");
@@ -116,9 +119,18 @@ export function JobCard({
       <View style={styles.jobHeader}>
         {job.thumbnail && <Image testID="job-thumbnail" source={{ uri: job.thumbnail }} style={styles.jobThumbnail} />}
         <View style={styles.jobHeaderInfo}>
-          <Text style={styles.jobTitle} numberOfLines={1}>
-            {job.title ?? job.url}
-          </Text>
+          {job.phase === "done" ? (
+            <TextInput
+              style={[styles.jobTitle, styles.jobTitleInputExtra]}
+              value={customName ?? job.title ?? job.url}
+              onChangeText={setCustomName}
+              accessibilityLabel={t("jobCard.renameAccessibilityLabel")}
+            />
+          ) : (
+            <Text style={styles.jobTitle} numberOfLines={1}>
+              {job.title ?? job.url}
+            </Text>
+          )}
           {hasPositiveDuration(job.duration) && (
             <Text style={styles.jobDuration}>{formatDuration(job.duration)}</Text>
           )}
@@ -241,13 +253,21 @@ export function JobCard({
                     : t("jobCard.save", { ext: extLabel })}
               </Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={onShare} disabled={isSharing}>
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() => onShare(customName ?? undefined)}
+              disabled={isSharing}
+            >
               <Text style={styles.buttonText}>{isSharing ? t("jobCard.sharingEllipsis") : t("jobCard.share")}</Text>
             </Pressable>
           </>
         )}
         {job.phase === "done" && !onSave && (
-          <Pressable style={[styles.downloadButton, isSharing && styles.buttonDisabled]} onPress={onShare} disabled={isSharing}>
+          <Pressable
+            style={[styles.downloadButton, isSharing && styles.buttonDisabled]}
+            onPress={() => onShare(customName ?? undefined)}
+            disabled={isSharing}
+          >
             <Text style={styles.downloadButtonText}>
               {isSharing ? t("jobCard.downloadingEllipsis") : t("jobCard.downloadExt", { ext: extLabel })}
             </Text>

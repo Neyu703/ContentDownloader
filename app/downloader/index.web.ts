@@ -238,6 +238,12 @@ export const downloader: Downloader = {
     notify();
   },
 
+  removeJob(id: string) {
+    stopPolling(id);
+    jobs.delete(id);
+    notify();
+  },
+
   clearFinished() {
     for (const [id, job] of jobs) {
       if (job.phase === "done" || job.phase === "error" || job.phase === "cancelled") {

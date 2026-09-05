@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const logWriteMock = vi.fn();
+
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("node:fs", () => ({
   default: {
@@ -8,13 +10,14 @@ vi.mock("node:fs", () => ({
     statSync: vi.fn(),
     unlinkSync: vi.fn(),
     mkdirSync: vi.fn(),
-    writeFileSync: vi.fn(),
+    createWriteStream: vi.fn(() => ({ write: logWriteMock, on: vi.fn() })),
     existsSync: vi.fn(),
   },
 }));
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import * as environment from "../environment.js";
 import type { ProgressUpdate } from "../progress.js";
 import { TikTok } from "./TikTok.js";
 
@@ -47,13 +50,29 @@ async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: s
   await Promise.resolve();
 }
 
+/** Joins every line appended to the download log across all DownloadLogger calls made in a test. */
+function allLoggedContent(): string {
+  return logWriteMock.mock.calls.map(([content]) => content as string).join("");
+}
+
 beforeEach(() => {
   vi.mocked(fs.existsSync).mockReturnValue(true);
   vi.mocked(fs.readdirSync).mockReturnValue([] as never);
+  vi.mocked(fs.statSync).mockReturnValue({ size: 1024 * 1024, mtimeMs: 0 } as never);
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+describe("checkAvailability", () => {
+  it("does not throw for a plain https URL", () => {
+    expect(() => tiktok("https://www.tiktok.com/@u/video/1").checkAvailability()).not.toThrow();
+  });
+
+  it("throws for a non-http(s) protocol", () => {
+    expect(() => tiktok("ftp://www.tiktok.com/@u/video/1").checkAvailability()).toThrow("Unsupported URL scheme: ftp:");
+  });
 });
 
 describe("fetchInfo", () => {
@@ -61,8 +80,25 @@ describe("fetchInfo", () => {
     const child = createFakeChild();
     mockNextSpawn(child);
     const promise = tiktok().fetchInfo();
-    await resolveSpawn(child, JSON.stringify({ title: "T", duration: 42, thumbnail: "thumb.jpg", uploader: "U" }));
-    await expect(promise).resolves.toEqual({ title: "T", duration: 42, thumbnail: "thumb.jpg", uploader: "U" });
+    await resolveSpawn(
+      child,
+      JSON.stringify({
+        title: "T",
+        duration: 42,
+        thumbnail: "thumb.jpg",
+        uploader: "U",
+        upload_date: "20260115",
+        id: "abc",
+      })
+    );
+    await expect(promise).resolves.toEqual({
+      title: "T",
+      duration: 42,
+      thumbnail: "thumb.jpg",
+      uploader: "U",
+      uploadDate: "20260115",
+      videoId: "abc",
+    });
   });
 
   it("applies every fallback when fields are missing", async () => {
@@ -75,7 +111,21 @@ describe("fetchInfo", () => {
       duration: 0,
       thumbnail: null,
       uploader: null,
+      uploadDate: null,
+      videoId: null,
     });
+  });
+
+  it("falls back to the caption when yt-dlp's title is a low-quality Instagram placeholder", async () => {
+    const child = createFakeChild();
+    mockNextSpawn(child);
+    const promise = tiktok().fetchInfo();
+    await resolveSpawn(
+      child,
+      JSON.stringify({ title: "Video by dubisthalle", description: "My trip to the mountains", uploader: "dubisthalle" })
+    );
+    const info = await promise;
+    expect(info.title).toBe("My trip to the mountains");
   });
 });
 
@@ -117,7 +167,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     expect(downloadArgs).toEqual(
       expect.arrayContaining(["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "320K"])
     );
-    expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(fs.createWriteStream).toHaveBeenCalled();
   });
 
   it("runs the video happy path with a height filter and the video converting message", async () => {
@@ -318,14 +368,58 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
 
         await expect(promise).rejects.toThrow("HTTP Error 403: Forbidden");
         expect(spawn).toHaveBeenCalledTimes(1 + downloadChildren.length);
-        const written = vi.mocked(fs.writeFileSync).mock.calls.at(-1)![1] as string;
+        const written = allLoggedContent();
         expect(written).toContain("attempt 1/3 failed");
         expect(written).toContain("attempt 2/3 failed");
-        expect(written).toContain("ERROR: HTTP Error 403: Forbidden");
+        expect(written).toContain("FAILED after");
+        expect(written).toContain("HTTP Error 403: Forbidden");
       } finally {
         vi.useRealTimers();
       }
     });
+  });
+
+  it("logs a known yt-dlp version and ffmpeg availability when present", async () => {
+    vi.spyOn(environment, "getYtDlpVersion").mockReturnValue("2026.01.01");
+    vi.spyOn(environment, "isFfmpegAvailable").mockReturnValue(true);
+    const infoChild = createFakeChild();
+    const downloadChild = createFakeChild();
+    mockNextSpawn(infoChild);
+    mockNextSpawn(downloadChild);
+    const promise = tiktok().download("audio", "128", vi.fn());
+    await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
+    downloadChild.emit("close", 0);
+    await promise;
+    expect(allLoggedContent()).toContain("yt-dlp=2026.01.01 ffmpeg=available");
+    vi.restoreAllMocks();
+  });
+
+  it("logs the result as unknown size when the finished file doesn't exist on disk", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    const infoChild = createFakeChild();
+    const downloadChild = createFakeChild();
+    mockNextSpawn(infoChild);
+    mockNextSpawn(downloadChild);
+    const promise = tiktok().download("audio", "128", vi.fn());
+    await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
+    downloadChild.emit("close", 0);
+    await promise;
+    expect(allLoggedContent()).toContain("size=unknown");
+  });
+
+  it("logs the result as unknown size when statting the finished file throws", async () => {
+    const infoChild = createFakeChild();
+    const downloadChild = createFakeChild();
+    mockNextSpawn(infoChild);
+    mockNextSpawn(downloadChild);
+    vi.mocked(fs.statSync).mockImplementation(() => {
+      throw new Error("EPERM");
+    });
+    const promise = tiktok().download("audio", "128", vi.fn());
+    await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
+    downloadChild.emit("close", 0);
+    await promise;
+    expect(allLoggedContent()).toContain("size=unknown");
   });
 
   it("evicts the oldest log files beyond MAX_LOG_FILES", async () => {

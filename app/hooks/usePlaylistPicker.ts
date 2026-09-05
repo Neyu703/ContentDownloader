@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { TFunction } from "i18next";
 import { downloader } from "../downloader";
 import type { MediaFormat, PlaylistInfo, PreviewPatch } from "../downloader/types";
@@ -8,7 +8,9 @@ import { generateGroupId, isAllPlaylistEntriesSelected } from "../lib/format";
 export interface PlaylistPickerState {
   url: string;
   info: PlaylistInfo;
-  selected: Set<string>;
+  /** Keyed by entry index, not entry.id — the same video (and thus the same id) can legitimately
+   *  appear twice in one playlist (re-added), and an id-keyed Set would conflate the two. */
+  selected: Set<number>;
   isLoadingMore: boolean;
   /** Set once a page comes back empty — stops further paging even if totalCount is missing/never reached. */
   noMorePages: boolean;
@@ -36,6 +38,9 @@ export function usePlaylistPicker(params: {
   const { format, quality, submit, setSubmitError, onUrlConsumed, t } = params;
   const [playlistPicker, setPlaylistPicker] = useState<PlaylistPickerState | null>(null);
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
+  // Guards loadMorePlaylistEntries() re-entry synchronously — the isLoadingMore *state* flag can't,
+  // since two onEndReached calls can both read it before React commits the update from the first.
+  const isLoadingMoreRef = useRef(false);
 
   async function startPlaylistFetch(url: string) {
     setSubmitError(null);
@@ -45,7 +50,7 @@ export function usePlaylistPicker(params: {
       setPlaylistPicker({
         url,
         info,
-        selected: new Set(info.entries.map((entry) => entry.id)),
+        selected: new Set(info.entries.map((_, index) => index)),
         isLoadingMore: false,
         noMorePages: info.entries.length === 0,
       });
@@ -62,11 +67,11 @@ export function usePlaylistPicker(params: {
     setPlaylistPicker((current) => (current ? update(current) : current));
   }
 
-  function togglePlaylistEntry(id: string) {
+  function togglePlaylistEntry(index: number) {
     updatePlaylistPicker((current) => {
       const selected = new Set(current.selected);
-      if (selected.has(id)) selected.delete(id);
-      else selected.add(id);
+      if (selected.has(index)) selected.delete(index);
+      else selected.add(index);
       return { ...current, selected };
     });
   }
@@ -74,24 +79,26 @@ export function usePlaylistPicker(params: {
   function togglePlaylistSelectAll() {
     updatePlaylistPicker((current) => {
       const selected = isAllPlaylistEntriesSelected(current)
-        ? new Set<string>()
-        : new Set(current.info.entries.map((entry) => entry.id));
+        ? new Set<number>()
+        : new Set(current.info.entries.map((_, index) => index));
       return { ...current, selected };
     });
   }
 
   async function loadMorePlaylistEntries() {
-    if (!playlistPicker || playlistPicker.isLoadingMore || playlistPicker.noMorePages) return;
+    if (!playlistPicker || isLoadingMoreRef.current || playlistPicker.noMorePages) return;
     const { url: playlistUrl, info } = playlistPicker;
     if (info.totalCount != null && info.entries.length >= info.totalCount) return;
 
+    isLoadingMoreRef.current = true;
     updatePlaylistPicker((current) => ({ ...current, isLoadingMore: true }));
     try {
       const nextPage = await downloader.getPlaylistInfo(playlistUrl, info.entries.length + 1);
       updatePlaylistPicker((current) => {
         // New entries arrive pre-selected, matching the initial page's default.
         const selected = new Set(current.selected);
-        for (const entry of nextPage.entries) selected.add(entry.id);
+        const firstNewIndex = current.info.entries.length;
+        nextPage.entries.forEach((_, offset) => selected.add(firstNewIndex + offset));
         return {
           ...current,
           info: { ...current.info, entries: [...current.info.entries, ...nextPage.entries] },
@@ -106,6 +113,8 @@ export function usePlaylistPicker(params: {
       // Silently stop paging on error — the entries already loaded stay usable, and the user can
       // still confirm with whatever loaded so far.
       updatePlaylistPicker((current) => ({ ...current, isLoadingMore: false }));
+    } finally {
+      isLoadingMoreRef.current = false;
     }
   }
 
@@ -115,7 +124,7 @@ export function usePlaylistPicker(params: {
     /* istanbul ignore next */
     if (!playlistPicker) return;
     const { info, selected } = playlistPicker;
-    const entries = info.entries.filter((entry) => selected.has(entry.id));
+    const entries = info.entries.filter((_, index) => selected.has(index));
     const groupId = generateGroupId();
     setPlaylistPicker(null);
     onUrlConsumed();

@@ -1,5 +1,8 @@
 package expo.modules.ytdlp.platforms
 
+import io.mockk.every
+import io.mockk.mockkConstructor
+import io.mockk.unmockkConstructor
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,5 +80,16 @@ class PlatformRegistryTest {
     @Test
     fun `accepts a schemeless link once normalized internally`() {
         assertTrue(detectPlatform("youtube.com/watch?v=x") is YouTube)
+    }
+
+    @Test
+    fun `returns null when a matched platform's checkAvailability throws`() {
+        mockkConstructor(YouTube::class)
+        try {
+            every { anyConstructed<YouTube>().checkAvailability() } throws IllegalStateException("unavailable")
+            assertNull(detectPlatform("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+        } finally {
+            unmockkConstructor(YouTube::class)
+        }
     }
 }

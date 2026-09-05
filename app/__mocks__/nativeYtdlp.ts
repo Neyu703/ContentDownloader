@@ -8,6 +8,7 @@ export function createNativeYtdlpMock() {
     enqueue: jest.fn().mockResolvedValue("native-job-id"),
     getPlaylistInfo: jest.fn().mockResolvedValue({ title: "", entries: [], totalCount: null }),
     cancel: jest.fn().mockResolvedValue(undefined),
+    removeIfFinished: jest.fn().mockResolvedValue(undefined),
     clearFinished: jest.fn().mockResolvedValue(undefined),
     getDebugLogFile: jest.fn().mockResolvedValue("/cache/ytdlp-debug-log.txt"),
     requestNotificationPermission: jest.fn().mockResolvedValue(true),

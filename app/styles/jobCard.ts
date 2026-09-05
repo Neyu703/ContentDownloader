@@ -42,6 +42,14 @@ export function makeJobCardStyles(colors: ThemeColors) {
       fontWeight: "600",
       fontSize: 14,
     },
+    // Shown instead of jobTitle once a download is done, so a bad auto-picked title (e.g. an
+    // Instagram/TikTok placeholder) can be fixed before saving. Combine with jobTitle via a style
+    // array to inherit its text styling.
+    jobTitleInputExtra: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: 2,
+    },
     jobDuration: {
       color: colors.textMuted,
       fontSize: 12,

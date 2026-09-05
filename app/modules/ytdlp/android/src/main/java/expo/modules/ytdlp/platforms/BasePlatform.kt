@@ -6,6 +6,7 @@ import expo.modules.ytdlp.DownloadJob
 import expo.modules.ytdlp.DownloadQueue
 import expo.modules.ytdlp.JobMetadata
 import expo.modules.ytdlp.nonEmptyTrimmedLines
+import org.json.JSONObject
 
 /** Joins title/thumbnail in a single --print template so fetchMetadata() stays one lightweight yt-dlp call. */
 private const val METADATA_FIELD_SEPARATOR = "|||"
@@ -37,30 +38,57 @@ abstract class BasePlatform(protected val url: String) : Platform {
         val output = DownloadQueue.engine.execute(request, job.id, false, null).out
         val line = nonEmptyTrimmedLines(output).lastOrNull() ?: return JobMetadata(job.url, null)
         val parts = line.split(METADATA_FIELD_SEPARATOR, limit = 2)
-        val title = parts.getOrNull(0)?.takeIf(String::isNotBlank) ?: job.url
+        val fastTitle = parts.getOrNull(0)?.takeIf(String::isNotBlank) ?: job.url
         val thumbnail = parts.getOrNull(1)?.takeIf { it.isNotBlank() && it != "NA" }
+        val title = if (isLowQualityTitle(fastTitle)) resolveBetterTitle(job, fastTitle) else fastTitle
         return JobMetadata(title, thumbnail)
     }
 
-    override fun buildRequest(job: DownloadJob, outputTemplate: String): YoutubeDLRequest {
+    /**
+     * Only reached when the fast title lookup above returned a low-quality placeholder (Instagram's
+     * "Video by X", a bare TikTok hashtag). Pays for one extra --dump-json call to pull the caption/
+     * uploader/upload date needed for a better fallback — mirrors fetchInfo() in
+     * server/src/platforms/BasePlatform.ts, but only for this minority case, keeping the common-case
+     * metadata lookup as cheap as before.
+     */
+    private fun resolveBetterTitle(job: DownloadJob, fallbackTitle: String): String {
         val request = YoutubeDLRequest(job.url)
+            .addOption("--dump-json")
+            .addOption("--no-playlist")
+            .addOption("--no-warnings")
+        val output = DownloadQueue.engine.execute(request, job.id, false, null).out
+        val json = nonEmptyTrimmedLines(output).lastOrNull()?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return fallbackTitle
+        return pickTitle(
+            TitleSource(
+                title = fallbackTitle,
+                description = json.optString("description").takeIf(String::isNotBlank),
+                uploader = json.optString("uploader").takeIf(String::isNotBlank),
+                uploadDate = json.optString("upload_date").takeIf(String::isNotBlank),
+                id = json.optString("id").takeIf(String::isNotBlank)
+            )
+        )
+    }
+
+    override fun buildRequest(job: DownloadJob, outputTemplate: String): YoutubeDLRequest =
+        buildRequestFrom(job.url, requestOptions(job, outputTemplate))
+
+    override fun requestOptions(job: DownloadJob, outputTemplate: String): List<Pair<String, String?>> {
+        val options = mutableListOf<Pair<String, String?>>()
         if (job.format == "audio") {
-            request.addOption("-f", "bestaudio/best")
-            request.addOption("-x")
-            request.addOption("--audio-format", "mp3")
-            request.addOption("--audio-quality", "${job.quality}K")
+            options += "-f" to "bestaudio/best"
+            options += "-x" to null
+            options += "--audio-format" to "mp3"
+            options += "--audio-quality" to "${job.quality}K"
         } else {
             val heightFilter = if (job.quality == "best") "" else "[height<=${job.quality}]"
-            request.addOption(
-                "-f",
-                "bestvideo$heightFilter+bestaudio/best$heightFilter/best$heightFilter"
-            )
-            request.addOption("--merge-output-format", "mp4")
+            options += "-f" to "bestvideo$heightFilter+bestaudio/best$heightFilter/best$heightFilter"
+            options += "--merge-output-format" to "mp4"
         }
-        request.addOption("--no-playlist")
-        request.addOption("--no-warnings")
-        request.addOption("-o", outputTemplate)
-        return request
+        options += "--no-playlist" to null
+        options += "--no-warnings" to null
+        options += "-o" to outputTemplate
+        return options
     }
 
     override fun isRetryableError(error: Throwable): Boolean = true

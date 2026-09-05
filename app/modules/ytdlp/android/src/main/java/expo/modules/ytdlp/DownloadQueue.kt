@@ -6,6 +6,7 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import expo.modules.ytdlp.platforms.PLAYLIST_PAGE_SIZE
 import expo.modules.ytdlp.platforms.Platform
+import expo.modules.ytdlp.platforms.buildRequestFrom
 import expo.modules.ytdlp.platforms.PlaylistCapablePlatform
 import expo.modules.ytdlp.platforms.describeErrorRaw
 import expo.modules.ytdlp.platforms.detectPlatform
@@ -42,6 +43,12 @@ private const val RETRY_DELAY_MS = 2000L
 
 /** Characters not allowed in a filename on common filesystems. */
 private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
+
+/** Characters that require quoting a shell argument for the reproducible command in the debug log. */
+private val SHELL_SPECIAL_CHARS = Regex("[\\s\"'\$`\\\\]")
+
+/** Characters that need a backslash escape inside a quoted shell argument. */
+private val SHELL_ESCAPE_CHARS = Regex("[\"\\\\\$`]")
 
 /**
  * Owns every download, independent of whether any UI is attached. Lives in the application process,
@@ -118,6 +125,7 @@ object DownloadQueue {
                 engine.init(appContext)
                 ffmpeg.init(appContext)
                 ytdlpVersion = engine.version(appContext)
+                DebugLog.add("yt-dlp version: ${ytdlpVersion ?: "unknown"}")
 
                 setSetup(SetupPhase.UPDATING, "setup.updating")
                 try {
@@ -201,6 +209,15 @@ object DownloadQueue {
         ids.forEach { cancel(it) }
     }
 
+    /** Dismisses a single finished (done/error/cancelled) job, e.g. right before retrying it. No-op for an active job. */
+    fun removeIfFinished(id: String) {
+        val removed = synchronized(lock) {
+            val job = jobs.firstOrNull { it.id == id && it.phase.isFinished } ?: return@synchronized false
+            jobs.remove(job)
+        }
+        if (removed) touch()
+    }
+
     fun clearFinished() {
         val removed = synchronized(lock) {
             val finished = jobs.filter { it.phase.isFinished }
@@ -214,6 +231,8 @@ object DownloadQueue {
     internal suspend fun runJob(context: Context, job: DownloadJob) {
         if (job.phase == JobPhase.CANCELLED) return
         var platform: Platform? = null
+        val startedAt = System.currentTimeMillis()
+        DebugLog.add("=== DOWNLOAD job=${job.id} url=${job.url} format=${job.format} quality=${job.quality} yt-dlp=${ytdlpVersion ?: "unknown"} ===")
         try {
             platform = detectPlatform(job.url) ?: throw IllegalArgumentException("errors.invalidUrl")
             prepare(context)
@@ -224,6 +243,7 @@ object DownloadQueue {
             val metadata = platform.fetchMetadata(job)
             job.title = metadata.title
             job.thumbnail = metadata.thumbnail
+            DebugLog.add("job ${job.id}: resolved title=\"${metadata.title}\"")
             if (job.phase == JobPhase.CANCELLED) return
 
             val ext = if (job.format == "audio") "mp3" else "mp4"
@@ -232,7 +252,15 @@ object DownloadQueue {
             advance(job, JobPhase.DOWNLOADING)
 
             downloadWithRetry(platform, job, outputDir, ext)
+            if (job.phase == JobPhase.CANCELLED) {
+                // cancel() already removed this job from the list; the finished file it just
+                // produced would otherwise never be cleaned up by clearFinished().
+                job.filePath?.let { runCatching { File(it).delete() } }
+                return
+            }
             advance(job, JobPhase.DONE)
+            val sizeBytes = job.filePath?.let { runCatching { File(it).length() }.getOrNull() }
+            DebugLog.add("=== RESULT job=${job.id}: SUCCESS after ${elapsedSeconds(startedAt)}s, file=${job.filePath} size=${sizeBytes ?: "unknown"} bytes ===")
         } catch (cancelled: YoutubeDL.CanceledException) {
             advance(job, JobPhase.CANCELLED)
         } catch (cancelled: CancellationException) {
@@ -241,6 +269,7 @@ object DownloadQueue {
         } catch (error: Throwable) {
             Log.e(TAG, "job ${job.id} failed", error)
             DebugLog.addError("job ${job.id} (${job.url}) failed", error)
+            DebugLog.add("=== RESULT job=${job.id}: FAILED after ${elapsedSeconds(startedAt)}s ===")
             val (key, params) = platform?.describeError(error)
                 ?: ("errors.raw" to mapOf("raw" to describeErrorRaw(error)))
             job.error = key
@@ -253,13 +282,20 @@ object DownloadQueue {
         }
     }
 
+    /** Formats an elapsed duration since `startedAt` (ms epoch) as e.g. "1.8", for a debug-log line. */
+    private fun elapsedSeconds(startedAt: Long): String =
+        "%.1f".format((System.currentTimeMillis() - startedAt) / 1000.0)
+
     /**
      * Runs the actual yt-dlp download, verifies a file was produced, renames it to the video title,
      * and records the resulting path on the job. Throws on failure — the caller (runJob) handles
      * cancellation/error routing.
      */
     internal fun downloadAndFinalize(platform: Platform, job: DownloadJob, outputDir: File, ext: String) {
-        val request = platform.buildRequest(job, File(outputDir, "${job.id}.%(ext)s").absolutePath)
+        val outputTemplate = File(outputDir, "${job.id}.%(ext)s").absolutePath
+        val options = platform.requestOptions(job, outputTemplate)
+        val request = buildRequestFrom(job.url, options)
+        DebugLog.add("job ${job.id}: command: yt-dlp ${quoteCommand(options, job.url)}")
         engine.execute(request, job.id, false) { progress, eta, line ->
             onOutput(job, progress, eta, line)
         }
@@ -281,12 +317,20 @@ object DownloadQueue {
      * server/src/platforms/BasePlatform.ts. Cancellation always propagates immediately, never retried.
      */
     private suspend fun downloadWithRetry(platform: Platform, job: DownloadJob, outputDir: File, ext: String) {
-        for (attempt in 1..MAX_ATTEMPTS) {
+        var attempt = 1
+        // A bounded `for (attempt in 1..MAX_ATTEMPTS)` here would leave one line of the compiler's
+        // own "loop completed normally" fallthrough that this function's own logic can never
+        // actually reach (every path returns or throws) but that the compiler can't prove — a
+        // permanent, unfixable coverage gap. `while (true)` has no such fallthrough: the compiler
+        // knows it never completes normally, so every line here is genuinely reachable and tested.
+        while (true) {
+            DebugLog.add("--- job ${job.id}: attempt $attempt/$MAX_ATTEMPTS ---")
             if (attempt > 1) {
                 job.lastLineKey = "job.retrying"
                 job.lastLineParams = mapOf("attempt" to attempt, "maxAttempts" to MAX_ATTEMPTS)
                 touch()
             }
+            val attemptStartedAt = System.currentTimeMillis()
             try {
                 downloadAndFinalize(platform, job, outputDir, ext)
                 return
@@ -295,11 +339,24 @@ object DownloadQueue {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
+                DebugLog.add(
+                    "job ${job.id}: attempt $attempt/$MAX_ATTEMPTS failed after ${elapsedSeconds(attemptStartedAt)}s: ${describeErrorRaw(error)}"
+                )
                 if (attempt >= MAX_ATTEMPTS || !platform.isRetryableError(error)) throw error
-                DebugLog.add("job ${job.id} download attempt $attempt/$MAX_ATTEMPTS failed, retrying: ${describeErrorRaw(error)}")
                 delay(RETRY_DELAY_MS)
+                attempt++
             }
         }
+    }
+
+    /** Quotes one shell argument, only when it actually contains a character that needs it. */
+    private fun quoteShellArg(arg: String): String =
+        if (SHELL_SPECIAL_CHARS.containsMatchIn(arg)) "\"${SHELL_ESCAPE_CHARS.replace(arg) { "\\${it.value}" }}\"" else arg
+
+    /** Quotes a yt-dlp request's options (plus the target URL) into one copy-pasteable shell command, for the debug log. */
+    private fun quoteCommand(options: List<Pair<String, String?>>, url: String): String {
+        val tokens = options.flatMap { (flag, value) -> if (value != null) listOf(flag, value) else listOf(flag) } + url
+        return tokens.joinToString(" ") { quoteShellArg(it) }
     }
 
     /** Mirrors sanitizeFilename() in server/src/index.ts and app/App.tsx. */
@@ -308,8 +365,13 @@ object DownloadQueue {
         return cleaned.ifEmpty { "download" }
     }
 
-    /** Renames the yt-dlp output (named by job id) to a human filename, deduping on collision. */
-    internal fun renameToTitledFile(source: File, title: String, ext: String): File {
+    /**
+     * Renames the yt-dlp output (named by job id) to a human filename, deduping on collision.
+     * Serialized on [lock] — MAX_PARALLEL lets two jobs finish at once, and without a lock two
+     * jobs picking the same title could both pass the exists() check before either renames,
+     * causing the second rename to silently overwrite the first job's file.
+     */
+    internal fun renameToTitledFile(source: File, title: String, ext: String): File = synchronized(lock) {
         val base = sanitizeFilename(title)
         var candidate = File(source.parentFile, "$base.$ext")
         var suffix = 2
@@ -317,7 +379,7 @@ object DownloadQueue {
             candidate = File(source.parentFile, "$base ($suffix).$ext")
             suffix++
         }
-        return if (candidate == source || source.renameTo(candidate)) candidate else source
+        return@synchronized if (candidate == source || source.renameTo(candidate)) candidate else source
     }
 
     internal fun onOutput(job: DownloadJob, progress: Float, eta: Long, line: String) {
@@ -326,6 +388,7 @@ object DownloadQueue {
         val trimmed = line.trim()
         if (trimmed.isNotEmpty()) {
             job.lastLine = trimmed
+            DebugLog.add("job ${job.id}: $trimmed")
             // A fresh raw output line means the job is actively progressing again — clear any
             // leftover "job.retrying" status key from downloadWithRetry() so it doesn't keep
             // masking real progress after a retry succeeds.

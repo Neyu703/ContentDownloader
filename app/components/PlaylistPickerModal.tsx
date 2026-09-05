@@ -7,7 +7,8 @@ import { PlaylistEntryRow } from "./PlaylistEntryRow";
 
 export interface PlaylistPickerViewState {
   info: PlaylistInfo;
-  selected: Set<string>;
+  /** Keyed by entry index, not entry.id — see the comment on PlaylistPickerState in usePlaylistPicker.ts. */
+  selected: Set<number>;
   isLoadingMore: boolean;
 }
 
@@ -22,7 +23,7 @@ export function PlaylistPickerModal({
 }: {
   picker: PlaylistPickerViewState | null;
   format: MediaFormat;
-  onToggleEntry: (id: string) => void;
+  onToggleEntry: (index: number) => void;
   onToggleAll: () => void;
   onLoadMore: () => void;
   onConfirm: () => void;
@@ -56,12 +57,15 @@ export function PlaylistPickerModal({
             testID="playlist-entry-list"
             style={styles.playlistEntryList}
             data={picker.info.entries}
-            keyExtractor={(entry) => entry.id}
-            renderItem={({ item }) => (
+            // Index, not entry.id: the same video (and thus the same id) can legitimately appear
+            // twice in one playlist (re-added), so entry.id would collide as both a list key and
+            // the selection key below.
+            keyExtractor={(_entry, index) => String(index)}
+            renderItem={({ item, index }) => (
               <PlaylistEntryRow
                 entry={item}
-                checked={picker.selected.has(item.id)}
-                onToggle={() => onToggleEntry(item.id)}
+                checked={picker.selected.has(index)}
+                onToggle={() => onToggleEntry(index)}
               />
             )}
             onEndReachedThreshold={0.5}

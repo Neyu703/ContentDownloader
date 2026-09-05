@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { detectPlatform } from "./registry.js";
 import { Instagram } from "./Instagram.js";
 import { SoundCloud } from "./SoundCloud.js";
@@ -59,5 +59,16 @@ describe("detectPlatform", () => {
 
   it("accepts a schemeless link once normalized internally", () => {
     expect(detectPlatform("youtube.com/watch?v=x")).toBeInstanceOf(YouTube);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns null when a matched platform's checkAvailability() throws", () => {
+    vi.spyOn(YouTube.prototype, "checkAvailability").mockImplementation(() => {
+      throw new Error("unavailable");
+    });
+    expect(detectPlatform("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeNull();
   });
 });

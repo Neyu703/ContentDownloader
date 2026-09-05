@@ -130,7 +130,7 @@ describe("isAllPlaylistEntriesSelected", () => {
   };
 
   it("is true when every entry is selected", () => {
-    expect(isAllPlaylistEntriesSelected({ info, selected: new Set(["a", "b"]) })).toBe(true);
+    expect(isAllPlaylistEntriesSelected({ info, selected: new Set([0, 1]) })).toBe(true);
   });
 
   it("is true for the vacuous zero-entries case", () => {
@@ -138,6 +138,6 @@ describe("isAllPlaylistEntriesSelected", () => {
   });
 
   it("is false when fewer entries are selected", () => {
-    expect(isAllPlaylistEntriesSelected({ info, selected: new Set(["a"]) })).toBe(false);
+    expect(isAllPlaylistEntriesSelected({ info, selected: new Set([0]) })).toBe(false);
   });
 });
