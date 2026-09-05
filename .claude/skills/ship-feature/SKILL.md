@@ -94,20 +94,17 @@ CLAUDE.md) — do not leave review fixes uncommitted going into the build step.
    "funktioniert", "gut"). A build succeeding is not the same as the user confirming it — wait for
    the actual confirmation message, same as every APK build earlier in this project's history.
 
-## Step 6: Push — only after Step 5's confirmation
+## Step 6: Push — only after Step 5's confirmation, cuts the release automatically
 
 `git push origin main` — all commits from Steps 1–5 go up together once the local test is
-confirmed.
-
-## Step 7: GitHub Release
-
-1. `git log v{previous}..HEAD --oneline` against the last release tag for the changelog.
-2. `gh release create v{version} --title v{version} --notes "## Changes since v{previous}\n- ..."`
-   — no APK attached here. Publishing the release fires the `release-apk` GitHub Actions
-   workflow, which builds the real, release-signed APK from the exact same commit and attaches
-   it automatically a short while later. Don't attach the Step 5 test APK (debug-signed) — it
-   would only get clobbered by CI's upload moments after, and reusing that filename manually
-   invites a race with no benefit.
+confirmed. `.github/workflows/auto-prerelease.yml` picks up the version-bump commit from Step 5
+on its own: since it bumps to an `X.0` (minor) version, the workflow tags it and publishes a real
+GitHub Release marked `latest` (not a pre-release) using that commit's own message as the notes.
+Publishing the release then fires the `release-apk` workflow, which builds the real,
+release-signed APK from the exact same commit and attaches it automatically a short while later.
+Nothing left to do manually — don't run `gh release create` yourself, it would collide with the
+tag the workflow already created. Tell the user the push went out and the release/APK build are
+running in CI.
 
 ## Rules
 

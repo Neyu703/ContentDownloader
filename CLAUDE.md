@@ -29,9 +29,11 @@ Every commit bumps `app/app.json`'s `expo.version` and `expo.android.versionCode
 level (default, regardless of commit type), and `app/android/app/build.gradle`
 (`versionName`/`versionCode`) in the same pass — the two must never drift, check both whenever
 either is touched. Commit subjects start with the resulting version, leftmost:
-`[vX.Y.Z] type: subject`. A GitHub Release is only ever cut at an `X.0` (minor) version — that
-happens manually via `ship-feature` Step 7. Every other commit (`X.Y.Z` with `Z != 0`) gets an
-automatic GitHub **pre-release** the moment it lands on `main`: see `.github/workflows/auto-prerelease.yml`.
+`[vX.Y.Z] type: subject`. Every commit that lands on `main` is tagged and released automatically
+by `.github/workflows/auto-prerelease.yml`: an `X.0` (minor) version becomes a real GitHub
+**Release** marked `latest`; every other commit (`X.Y.Z` with `Z != 0`) becomes a GitHub
+**pre-release**. Either kind fires `.github/workflows/release-apk.yml` and attaches the
+release-signed APK.
 
 ## Android builds
 
@@ -50,10 +52,10 @@ the only source of the real-signed release artifact.
 
 `.github/workflows/auto-prerelease.yml` triggers on every push to `main`. For each new commit in
 the push (walks the whole range, not just the tip — a batch of `smart-commit` commits pushed
-together all get processed) whose version is `X.Y.Z` with `Z != 0`, it pushes a `vX.Y.Z` tag and
-publishes a GitHub pre-release using that commit's own message as the release notes, which in
-turn fires `release-apk.yml` above and attaches a real signed test APK. `X.0` commits are left
-untouched — those become official releases via `ship-feature` Step 7 instead.
+together all get processed) with a version bump, it pushes a `vX.Y.Z` tag and publishes a GitHub
+release using that commit's own message as the release notes — `--latest` for an `X.0` (minor)
+commit, `--prerelease` for every other (`X.Y.Z` with `Z != 0`) commit. Either kind fires
+`release-apk.yml` above and attaches the real signed APK automatically.
 
 ## Git commits
 

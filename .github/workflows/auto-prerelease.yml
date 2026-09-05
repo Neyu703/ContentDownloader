@@ -1,4 +1,4 @@
-name: Auto Pre-release
+name: Auto Release
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
 
-      - name: Tag and pre-release each new patch commit
+      - name: Tag and release each new commit
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           BEFORE: ${{ github.event.before }}
@@ -39,12 +39,6 @@ jobs:
               continue
             fi
 
-            PATCH=$(echo "$VERSION" | cut -d. -f3)
-            if [ "$PATCH" = "0" ]; then
-              echo "$VERSION is a minor (X.0) release, left for ship-feature to cut manually, skipping"
-              continue
-            fi
-
             TAG="v$VERSION"
             if git rev-parse "$TAG" >/dev/null 2>&1; then
               echo "Tag $TAG already exists, skipping"
@@ -56,5 +50,13 @@ jobs:
 
             # strip the leading "[vX.Y.Z] " from the subject — the release title already shows the version
             MSG=$(git log -1 --format=%B "$sha" | sed -E '1s/^\[v[0-9]+\.[0-9]+\.[0-9]+\]\s*//')
-            gh release create "$TAG" --title "$TAG" --notes "$MSG" --prerelease
+
+            # X.0 (minor) commits are the real, curated releases and become "latest"; every other
+            # X.Y.Z (patch) commit is a pre-release test build, never marked latest.
+            PATCH=$(echo "$VERSION" | cut -d. -f3)
+            if [ "$PATCH" = "0" ]; then
+              gh release create "$TAG" --title "$TAG" --notes "$MSG" --latest
+            else
+              gh release create "$TAG" --title "$TAG" --notes "$MSG" --prerelease
+            fi
           done
