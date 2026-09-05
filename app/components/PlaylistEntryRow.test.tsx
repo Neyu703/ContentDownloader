@@ -2,6 +2,12 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { PlaylistEntryRow } from "./PlaylistEntryRow";
 import type { PlaylistEntry } from "../downloader/types";
 
+// PlaylistEntryRow renders through useStyles() -> useTheme() -> ThemeContext, which imports
+// AsyncStorage (for the persisted theme setting) even when no ThemeProvider is mounted.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 const ENTRY: PlaylistEntry = {
   id: "1",
   url: "https://youtube.com/watch?v=1",

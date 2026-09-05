@@ -121,4 +121,16 @@ export const downloader: Downloader = {
     const filename = job.result.split(/[\\/]/).pop()!;
     await Ytdlp.saveToDownloads(job.result, filename, mimeTypeForExt(job.ext));
   },
+
+  async pickDownloadsFolder() {
+    return Ytdlp.pickDownloadsFolder();
+  },
+
+  async getDownloadsFolderName() {
+    return Ytdlp.getDownloadsFolderName();
+  },
+
+  async resetDownloadsFolder() {
+    await Ytdlp.resetDownloadsFolder();
+  },
 };

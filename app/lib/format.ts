@@ -5,6 +5,9 @@ import type { JobPhase, MediaFormat, PlaylistInfo, SetupPhase } from "../downloa
 // a single video that happens to be playing within one.
 export const PLAYLIST_URL_PATTERN = /[?&]list=/;
 
+export const AUDIO_QUALITIES = ["128", "192", "320"] as const;
+export const VIDEO_QUALITIES = ["360", "480", "720", "1080", "best"] as const;
+
 /** Splits multi-line pasted input (batch-queue) into individual trimmed, non-empty URL candidates. */
 export function parseUrlLines(input: string): string[] {
   return input

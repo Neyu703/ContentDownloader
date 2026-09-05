@@ -7,6 +7,12 @@ import { initI18n } from "../i18n";
 // JobCard renders every label via useTranslation()'s t(), which otherwise returns the raw key.
 initI18n("de");
 
+// JobCard renders through useStyles() -> useTheme() -> ThemeContext, which imports AsyncStorage
+// (for the persisted theme setting) even when no ThemeProvider is mounted.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 const BASE_JOB: JobState = {
   id: "1",
   url: "https://youtube.com/watch?v=x",

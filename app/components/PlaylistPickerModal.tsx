@@ -2,7 +2,7 @@ import { FlatList, Modal, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { MediaFormat, PlaylistInfo } from "../downloader/types";
 import { isAllPlaylistEntriesSelected, playlistConfirmLabel } from "../lib/format";
-import { styles } from "../styles";
+import { useStyles } from "../styles/useStyles";
 import { PlaylistEntryRow } from "./PlaylistEntryRow";
 
 export interface PlaylistPickerViewState {
@@ -28,6 +28,7 @@ export function PlaylistPickerModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   // Conditionally rendering the Modal element itself (instead of always rendering it with a
   // toggled `visible` prop) so closing it fully unmounts the portal — react-native-web's Modal was

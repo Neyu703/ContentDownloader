@@ -1,9 +1,10 @@
 import { FlatList, Modal, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { CHANGELOG_ENTRIES, type ChangelogEntry } from "../changelog/entries";
-import { styles } from "../styles";
+import { useStyles } from "../styles/useStyles";
 
 export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const styles = useStyles();
   const { t, i18n } = useTranslation();
   const language = i18n.language === "de" ? "de" : "en";
 

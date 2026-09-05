@@ -314,3 +314,39 @@ describe("saveToDownloads", () => {
     );
   });
 });
+
+describe("pickDownloadsFolder", () => {
+  it("returns the picked folder's display name", async () => {
+    mockYtdlp.pickDownloadsFolder.mockResolvedValueOnce("MyDownloads");
+    const downloader = freshDownloader();
+    await expect(downloader.pickDownloadsFolder!()).resolves.toBe("MyDownloads");
+  });
+
+  it("returns null when the user cancelled", async () => {
+    mockYtdlp.pickDownloadsFolder.mockResolvedValueOnce(null);
+    const downloader = freshDownloader();
+    await expect(downloader.pickDownloadsFolder!()).resolves.toBeNull();
+  });
+});
+
+describe("getDownloadsFolderName", () => {
+  it("returns the currently picked folder's display name", async () => {
+    mockYtdlp.getDownloadsFolderName.mockResolvedValueOnce("MyDownloads");
+    const downloader = freshDownloader();
+    await expect(downloader.getDownloadsFolderName!()).resolves.toBe("MyDownloads");
+  });
+
+  it("returns null when using the default public Downloads folder", async () => {
+    mockYtdlp.getDownloadsFolderName.mockResolvedValueOnce(null);
+    const downloader = freshDownloader();
+    await expect(downloader.getDownloadsFolderName!()).resolves.toBeNull();
+  });
+});
+
+describe("resetDownloadsFolder", () => {
+  it("resets the native folder preference", async () => {
+    const downloader = freshDownloader();
+    await downloader.resetDownloadsFolder!();
+    expect(mockYtdlp.resetDownloadsFolder).toHaveBeenCalled();
+  });
+});

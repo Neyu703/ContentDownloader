@@ -5,6 +5,11 @@ import App from "./App";
 import { loadLanguageSetting } from "./i18n/languagePreference";
 import { checkForVersionUpdate } from "./changelog/lastSeenVersion";
 
+// ThemeProvider (rendered inside App) imports AsyncStorage for the persisted theme setting.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 // The real react-native-safe-area-context needs native-measured insets that never arrive in Jest,
 // so SafeAreaProvider otherwise renders no children at all. Keep every other real export (the
 // context objects react-navigation's bottom-tabs consumes directly) and only swap in immediate,

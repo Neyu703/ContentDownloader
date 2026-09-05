@@ -1,16 +1,19 @@
 import { StyleSheet } from "react-native";
-import { layoutStyles } from "./layout";
-import { formStyles } from "./form";
-import { dropdownStyles } from "./dropdown";
-import { jobCardStyles } from "./jobCard";
-import { playlistStyles } from "./playlist";
-import { changelogStyles } from "./changelog";
+import type { ThemeColors } from "../theme/colors";
+import { makeLayoutStyles } from "./layout";
+import { makeFormStyles } from "./form";
+import { makeDropdownStyles } from "./dropdown";
+import { makeJobCardStyles } from "./jobCard";
+import { makePlaylistStyles } from "./playlist";
+import { makeChangelogStyles } from "./changelog";
 
-export const styles = StyleSheet.create({
-  ...layoutStyles,
-  ...formStyles,
-  ...dropdownStyles,
-  ...jobCardStyles,
-  ...playlistStyles,
-  ...changelogStyles,
-});
+export function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    ...makeLayoutStyles(colors),
+    ...makeFormStyles(colors),
+    ...makeDropdownStyles(colors),
+    ...makeJobCardStyles(colors),
+    ...makePlaylistStyles(colors),
+    ...makeChangelogStyles(colors),
+  });
+}

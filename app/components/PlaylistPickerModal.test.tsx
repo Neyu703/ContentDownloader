@@ -6,6 +6,12 @@ import { initI18n } from "../i18n";
 // PlaylistPickerModal renders every label via useTranslation()'s t(), which otherwise returns the raw key.
 initI18n("de");
 
+// PlaylistPickerModal renders through useStyles() -> useTheme() -> ThemeContext, which imports
+// AsyncStorage (for the persisted theme setting) even when no ThemeProvider is mounted.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 const ENTRIES: PlaylistEntry[] = [
   { id: "a", url: "u1", title: "Video A", thumbnail: null, duration: 60 },
   { id: "b", url: "u2", title: "Video B", thumbnail: null, duration: 120 },

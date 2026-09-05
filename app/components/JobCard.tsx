@@ -11,7 +11,7 @@ import {
   hasPositiveDuration,
   isFinishedPhase,
 } from "../lib/format";
-import { styles } from "../styles";
+import { useStyles } from "../styles/useStyles";
 
 // No fresh line from yt-dlp for this long: the job is still alive, YouTube is just slow to answer.
 const STALL_HINT_MS = 20_000;
@@ -37,6 +37,7 @@ export function JobCard({
   /** Native only — omitted entirely on web, where the single button already saves via the browser. */
   onSave?: () => Promise<void>;
 }) {
+  const styles = useStyles();
   const { t } = useTranslation();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);

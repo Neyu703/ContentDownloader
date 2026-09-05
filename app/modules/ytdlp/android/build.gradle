@@ -45,6 +45,8 @@ tasks.withType(Test).configureEach {
 dependencies {
   implementation "androidx.core:core-ktx:1.17.0"
   implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
+  // DocumentFile wraps the Storage Access Framework tree the user picks for a custom Downloads folder.
+  implementation "androidx.documentfile:documentfile:1.1.0"
 
   // Bundles yt-dlp, Python 3.11, QuickJS and ffmpeg as native libraries.
   // The yt-dlp binary itself is replaced at runtime, see DownloadQueue.prepare().

@@ -16,6 +16,7 @@ import * as MailComposer from "expo-mail-composer";
 import * as Sharing from "expo-sharing";
 import { useTranslation } from "react-i18next";
 import { downloader } from "../downloader";
+import { loadFormatPreference, saveFormatPreference } from "../downloader/formatPreference";
 import {
   type JobState,
   type MediaFormat,
@@ -37,7 +38,8 @@ import {
   sanitizeFilename,
   toFileUri,
 } from "../lib/format";
-import { styles } from "../styles";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../theme/ThemeContext";
 
 // Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
 const WIDE_LAYOUT_BREAKPOINT = 700;
@@ -64,6 +66,8 @@ function useNow(active: boolean): number {
 }
 
 export function HomeScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("audio");
@@ -135,9 +139,26 @@ export function HomeScreen() {
     });
   }, []);
 
+  // Starts the form with whatever format/quality the user picked last time, instead of always
+  // resetting to the hardcoded "Audio/320" default on every launch.
+  useEffect(() => {
+    loadFormatPreference().then((preference) => {
+      if (!preference) return;
+      setFormat(preference.format);
+      setQuality(preference.quality);
+    });
+  }, []);
+
   function handleFormatChange(next: MediaFormat) {
+    const nextQuality = DEFAULT_QUALITY[next];
     setFormat(next);
-    setQuality(DEFAULT_QUALITY[next]);
+    setQuality(nextQuality);
+    saveFormatPreference({ format: next, quality: nextQuality });
+  }
+
+  function handleQualityChange(next: string) {
+    setQuality(next);
+    saveFormatPreference({ format, quality: next });
   }
 
   async function handlePaste() {
@@ -282,7 +303,7 @@ export function HomeScreen() {
         <TextInput
           style={styles.urlInput}
           placeholder={t("home.urlPlaceholder")}
-          placeholderTextColor="#666"
+          placeholderTextColor={colors.textFaint}
           value={url}
           onChangeText={setUrl}
           autoCapitalize="none"
@@ -317,7 +338,7 @@ export function HomeScreen() {
         </View>
         <View style={styles.optionsCol}>
           <Text style={styles.label}>{t("home.qualityLabel")}</Text>
-          <Dropdown options={qualityOptions[format]} value={quality} onChange={setQuality} />
+          <Dropdown options={qualityOptions[format]} value={quality} onChange={handleQualityChange} />
         </View>
       </View>
 

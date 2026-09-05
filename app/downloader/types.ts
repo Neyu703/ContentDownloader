@@ -78,8 +78,14 @@ export interface Downloader {
    * file for bug reports and returns its file:// URI.
    */
   getDebugLogFileUri?(): Promise<string>;
-  /** Native only — copies a finished job's file into the device's public Downloads folder. */
+  /** Native only — copies a finished job's file into the device's public Downloads folder (or the folder picked via pickDownloadsFolder(), if any). */
   saveToDownloads?(job: JobState): Promise<void>;
+  /** Native only — opens Android's folder picker; returns the picked folder's display name, or null if the user cancelled. */
+  pickDownloadsFolder?(): Promise<string | null>;
+  /** Native only — the currently picked folder's display name, or null when using the default public Downloads folder. */
+  getDownloadsFolderName?(): Promise<string | null>;
+  /** Native only — resets saveToDownloads() back to the default public Downloads folder. */
+  resetDownloadsFolder?(): Promise<void>;
   /** Web only (talks to the local server) — fetches title/duration/thumbnail for a preview before starting a download. */
   getVideoInfo?(url: string, signal?: AbortSignal): Promise<VideoInfo>;
   /** Web only — patches title/duration/thumbnail onto a job that was already started before the preview info arrived. */

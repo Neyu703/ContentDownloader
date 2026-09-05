@@ -1,9 +1,14 @@
 package expo.modules.ytdlp
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import androidx.documentfile.provider.DocumentFile
 import expo.modules.interfaces.permissions.PermissionsStatus
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -14,17 +19,28 @@ import kotlinx.coroutines.launch
 
 private const val STATE_EVENT = "onStateChange"
 
+private const val FOLDER_GRANT_FLAGS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+/** The picked folder's own display name (its last path segment), or null if it's no longer reachable. */
+private fun folderDisplayName(context: Context, treeUri: Uri): String? =
+    DocumentFile.fromTreeUri(context, treeUri)?.name
+
 /**
  * Thin bridge between JS and [DownloadQueue]. Holds no download logic itself, only forwards calls
  * and mirrors [DownloadQueue.revision] into the "onStateChange" event while JS is listening.
  */
 class YtdlpModule : Module() {
     private var observerJob: Job? = null
+    private var folderPickerLauncher: AppContextActivityResultLauncher<String, Uri?>? = null
 
     override fun definition() = ModuleDefinition {
         Name("Ytdlp")
 
         Events(STATE_EVENT)
+
+        RegisterActivityContracts {
+            folderPickerLauncher = registerForActivityResult(OpenDocumentTreeContract())
+        }
 
         // DownloadQueue.prepare() is a suspend function (it awaits the Python/ffmpeg unpack and
         // the yt-dlp update check), so this needs the Coroutine wrapper instead of plain AsyncFunction.
@@ -60,6 +76,40 @@ class YtdlpModule : Module() {
 
         AsyncFunction("saveToDownloads") { filePath: String, filename: String, mimeType: String ->
             MediaStoreSaver.saveToDownloads(appContext.reactContext!!, filePath, filename, mimeType)
+        }
+
+        // Opens Android's Storage Access Framework folder picker so the user can choose where
+        // saveToDownloads() writes files instead of the default public Downloads folder. Returns
+        // the picked folder's display name, or null if the user cancelled (or the picker was
+        // somehow never registered — RegisterActivityContracts above always runs first in practice).
+        AsyncFunction("pickDownloadsFolder") Coroutine { ->
+            val launcher = folderPickerLauncher ?: return@Coroutine null
+            val treeUri = launcher.launch("") ?: return@Coroutine null
+            val context = appContext.reactContext!!
+            context.contentResolver.takePersistableUriPermission(treeUri, FOLDER_GRANT_FLAGS)
+            DownloadsFolderPreference.set(context, treeUri.toString())
+            folderDisplayName(context, treeUri)
+        }
+
+        // Null means "using the default public Downloads folder" — both when nothing was ever
+        // picked, and (defensively) when a previously picked folder is no longer reachable.
+        AsyncFunction("getDownloadsFolderName") {
+            val context = appContext.reactContext!!
+            val treeUriString = DownloadsFolderPreference.get(context) ?: return@AsyncFunction null
+            folderDisplayName(context, Uri.parse(treeUriString))
+        }
+
+        AsyncFunction("resetDownloadsFolder") {
+            val context = appContext.reactContext!!
+            val treeUriString = DownloadsFolderPreference.get(context)
+            if (treeUriString != null) {
+                // Best-effort: the permission may already be gone (folder deleted/moved), which
+                // must not stop the preference itself from being cleared below.
+                runCatching {
+                    context.contentResolver.releasePersistableUriPermission(Uri.parse(treeUriString), FOLDER_GRANT_FLAGS)
+                }
+            }
+            DownloadsFolderPreference.set(context, null)
         }
 
         // Android 13+ only: without this the queue still runs, the notification just never

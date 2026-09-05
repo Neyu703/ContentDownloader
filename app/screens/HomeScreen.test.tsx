@@ -1,5 +1,6 @@
 import { Animated, Dimensions, Platform } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as MailComposer from "expo-mail-composer";
@@ -15,6 +16,9 @@ jest.mock("expo-clipboard", () => ({ getStringAsync: jest.fn() }));
 jest.mock("expo-mail-composer", () => ({ isAvailableAsync: jest.fn(), composeAsync: jest.fn() }));
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { extra: {} } } }));
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
 
 let mockDownloader: ReturnType<typeof makeDownloader>;
 jest.mock("../downloader", () => ({
@@ -82,8 +86,9 @@ function makePlaylistInfo(overrides: Partial<PlaylistInfo> = {}): PlaylistInfo {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
   mockDownloader = makeDownloader();
   setWindowWidth(400);
   Platform.OS = "ios";
@@ -114,6 +119,39 @@ describe("format/quality selection", () => {
     await fireEvent.press(screen.getByText("Beste (320 kbps)"));
     await fireEvent.press(screen.getByText("Gut (192 kbps)"));
     expect(screen.getByText("Gut (192 kbps)")).toBeTruthy();
+  });
+
+  it("restores a saved format/quality preference on mount instead of the hardcoded default", async () => {
+    await AsyncStorage.setItem("contentdownloader.formatPreference", JSON.stringify({ format: "video", quality: "720" }));
+    await render(<HomeScreen />);
+    await waitFor(() => expect(screen.getByText("Video (MP4)")).toBeTruthy());
+    expect(screen.getByText("720p")).toBeTruthy();
+  });
+
+  it("ignores an invalid saved preference and keeps the hardcoded default", async () => {
+    await AsyncStorage.setItem("contentdownloader.formatPreference", JSON.stringify({ format: "audio", quality: "not-a-real-quality" }));
+    await render(<HomeScreen />);
+    await waitFor(() => expect(screen.getByText("Beste (320 kbps)")).toBeTruthy());
+  });
+
+  it("persists a format change for the next launch", async () => {
+    await render(<HomeScreen />);
+    await fireEvent.press(screen.getByText("Nur Audio (MP3)"));
+    await fireEvent.press(screen.getByText("Video (MP4)"));
+    await waitFor(async () => {
+      const stored = await AsyncStorage.getItem("contentdownloader.formatPreference");
+      expect(stored && JSON.parse(stored)).toEqual({ format: "video", quality: "best" });
+    });
+  });
+
+  it("persists a quality change for the next launch", async () => {
+    await render(<HomeScreen />);
+    await fireEvent.press(screen.getByText("Beste (320 kbps)"));
+    await fireEvent.press(screen.getByText("Gut (192 kbps)"));
+    await waitFor(async () => {
+      const stored = await AsyncStorage.getItem("contentdownloader.formatPreference");
+      expect(stored && JSON.parse(stored)).toEqual({ format: "audio", quality: "192" });
+    });
   });
 });
 

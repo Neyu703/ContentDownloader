@@ -106,11 +106,17 @@ nach Aufwand sortiert, klein → groß.
   einzelnen fertigen Job per Swipe entfernen. **Aufwand: klein**.
 - [ ] **[3-5] Undo für "Fertige entfernen"** — kurzes Zeitfenster (z.B. 5s Snackbar), um versehentliches
   Entfernen rückgängig zu machen. **Aufwand: klein**.
-- [ ] **[3-6] Settings-Screen** — Standard-Format/-Qualität merken (aktuell immer "Audio/320" beim
+- [x] **[3-6] Settings-Screen** — Standard-Format/-Qualität merken (aktuell immer "Audio/320" beim
   Neustart), Downloads-Ordner-Wahl (nativ), Theme. **Aufwand: klein–mittel**.
-- [ ] **[3-7] Hell/Dunkel-Theme** — `App.tsx` hat aktuell nur fest verdrahtete Dark-Colors in
+  Format/Qualität-Persistenz + Theme live im Browser verifiziert; Downloads-Ordner-Wahl (Android,
+  Storage-Access-Framework-Picker) implementiert und über Kotlin-Unit-Tests abgesichert, aber
+  mangels Android-Gerät/Emulator in dieser Umgebung nicht auf einem echten Gerät getestet.
+- [x] **[3-7] Hell/Dunkel-Theme** — `App.tsx` hat aktuell nur fest verdrahtete Dark-Colors in
   `StyleSheet.create`. Ein System-Theme-Toggle wäre für ein UI dieser Größe überschaubar.
   **Aufwand: klein–mittel**.
+  Umgesetzt als `ThemeContext`/`ThemeProvider` mit System/Hell/Dunkel-Auswahl, alle Style-Dateien
+  auf theme-fähige Farbtokens umgestellt, live im Browser verifiziert (inkl. Persistenz über
+  Reload).
 - [ ] **[3-8] Benachrichtigung bei Fertigstellung** — besonders relevant, wenn die App im Hintergrund
   läuft (Playlist-/lange Downloads). `expo-notifications` als neue Dependency.
   **Aufwand: mittel**.
@@ -228,8 +234,9 @@ Ideen, die gezielt diese drei Formfaktoren bedienen, statt generisch "responsive
 
 ## 8. Sicherheit & Datenschutz
 
-- [ ] **[8-1] Rechtlicher Hinweis im UI** — kurzer, unaufdringlicher Hinweis, dass Downloads nur für Inhalte
+- [x] **[8-1] Rechtlicher Hinweis im UI** — kurzer, unaufdringlicher Hinweis, dass Downloads nur für Inhalte
   genutzt werden sollten, an denen die entsprechenden Rechte bestehen. **Aufwand: klein**.
+  Als kleiner, gedämpfter Hinweistext unten im Settings-Screen umgesetzt.
 - [ ] **[8-2] Server-Zugriff absichern** — `server/src/index.ts` erlaubt aktuell jedem im selben
   LAN/localhost uneingeschränkt `/api/convert`; ein einfacher gemeinsamer API-Key (per
   Header) würde Fremdzugriff im WLAN verhindern. **Aufwand: klein**.

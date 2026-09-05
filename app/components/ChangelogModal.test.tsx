@@ -5,6 +5,12 @@ import i18n, { initI18n } from "../i18n";
 
 initI18n("de");
 
+// ChangelogModal renders through useStyles() -> useTheme() -> ThemeContext, which imports
+// AsyncStorage (for the persisted theme setting) even when no ThemeProvider is mounted.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 afterEach(() => {
   i18n.changeLanguage("de");
 });

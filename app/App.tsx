@@ -8,6 +8,7 @@ import { loadLanguageSetting, resolveLanguage } from "./i18n/languagePreference"
 import { checkForVersionUpdate } from "./changelog/lastSeenVersion";
 import { ChangelogModal } from "./components/ChangelogModal";
 import { RootTabs } from "./navigation/RootTabs";
+import { ThemeProvider } from "./theme/ThemeContext";
 
 export default function App() {
   const [isI18nReady, setIsI18nReady] = useState(false);
@@ -29,12 +30,14 @@ export default function App() {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <SafeAreaProvider>
-        <NavigationContainer>
-          <RootTabs />
-        </NavigationContainer>
-        <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <SafeAreaProvider>
+          <NavigationContainer>
+            <RootTabs />
+          </NavigationContainer>
+          <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
+        </SafeAreaProvider>
+      </ThemeProvider>
     </I18nextProvider>
   );
 }

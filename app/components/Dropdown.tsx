@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
-import { styles } from "../styles";
+import { useStyles } from "../styles/useStyles";
 
 export function Dropdown<T extends string>({
   options,
@@ -11,6 +11,7 @@ export function Dropdown<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
 

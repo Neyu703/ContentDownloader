@@ -32,7 +32,7 @@ describe("RootTabs", () => {
         <RootTabs />
       </NavigationContainer>
     );
-    expect(screen.getByText("YouTube Downloader")).toBeTruthy();
+    expect(screen.getByText("ContentDownloader")).toBeTruthy();
   });
 
   it("labels the two tabs via i18n", async () => {

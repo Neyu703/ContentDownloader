@@ -71,8 +71,14 @@ declare class NativeYtdlp extends NativeModule<YtdlpEvents> {
   /** Writes the current log to a cache file and returns its absolute (non-URI) path. */
   getDebugLogFile(): Promise<string>;
   requestNotificationPermission(): Promise<boolean>;
-  /** Copies a cache file into the public Downloads collection; returns the resulting content URI. */
+  /** Copies a cache file into the public Downloads collection (or the picked folder, if any); returns the resulting content URI. */
   saveToDownloads(filePath: string, filename: string, mimeType: string): Promise<string>;
+  /** Opens the Storage Access Framework folder picker; returns the picked folder's display name, or null if cancelled. */
+  pickDownloadsFolder(): Promise<string | null>;
+  /** The currently picked folder's display name, or null when using the default public Downloads folder. */
+  getDownloadsFolderName(): Promise<string | null>;
+  /** Resets saveToDownloads() back to the default public Downloads folder. */
+  resetDownloadsFolder(): Promise<void>;
 }
 
 export default requireNativeModule<NativeYtdlp>("Ytdlp");

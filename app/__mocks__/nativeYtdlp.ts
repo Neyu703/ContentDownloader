@@ -12,6 +12,9 @@ export function createNativeYtdlpMock() {
     getDebugLogFile: jest.fn().mockResolvedValue("/cache/ytdlp-debug-log.txt"),
     requestNotificationPermission: jest.fn().mockResolvedValue(true),
     saveToDownloads: jest.fn().mockResolvedValue("content://downloads/x"),
+    pickDownloadsFolder: jest.fn().mockResolvedValue(null),
+    getDownloadsFolderName: jest.fn().mockResolvedValue(null),
+    resetDownloadsFolder: jest.fn().mockResolvedValue(undefined),
     addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
     removeAllListeners: jest.fn(),
   };

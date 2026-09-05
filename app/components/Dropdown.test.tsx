@@ -1,6 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { Dropdown } from "./Dropdown";
 
+// Dropdown renders through useStyles() -> useTheme() -> ThemeContext, which imports AsyncStorage
+// (for the persisted theme setting) even when no ThemeProvider is mounted.
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
 const OPTIONS = [
   { value: "a", label: "Option A" },
   { value: "b", label: "Option B" },
