@@ -44,11 +44,12 @@ and list it in the final summary as "not auto-applied, needs a look" (a `spawn_t
 `dismiss_task`/`spawn_task` is fine too). Skipping is the safe default here, not forcing the edit
 through.
 
-**Don't add a separate utils-audit step.** `principles`' own Step 3 already runs [[utils-audit]]
-internally for every `.ts`/`.js`/`.py` file in its target set instead of redoing that analysis —
-invoking it again as its own pipeline step would re-resolve and re-read the same (currently
-nonexistent — no `utils.ts` anywhere in `app/` as of 2026-08-20) utils module a second time for
-zero new findings. `principles` covers this on its own.
+**Don't add a separate utils-audit step.** `principles`' own Step 3 already runs its DRY/utils-module
+detector (`--dry-only` mode, the former standalone `utils-audit` skill) internally for every
+`.ts`/`.js`/`.py` file in its target set instead of redoing that analysis — invoking it again as its
+own pipeline step would re-resolve and re-read the same (currently nonexistent — no `utils.ts`
+anywhere in `app/` as of 2026-08-20) utils module a second time for zero new findings. `principles`
+covers this on its own.
 
 ## Step 3: Agent code review
 
