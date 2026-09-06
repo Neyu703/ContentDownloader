@@ -1,4 +1,3 @@
-import { errorMessage } from "../utils.js";
 import { BasePlatform } from "./BasePlatform.js";
 import type { UserFacingError } from "./Platform.js";
 
@@ -11,17 +10,15 @@ export class Instagram extends BasePlatform {
 
   static readonly HOSTS = ["instagram.com", "www.instagram.com"];
 
-  private isSlideshowError(err: unknown, fallbackRaw?: string): boolean {
-    return NO_VIDEO_IN_POST_PATTERN.test(errorMessage(err, fallbackRaw));
-  }
+  private static readonly isSlideshowError = BasePlatform.permanentFailureMatcher(NO_VIDEO_IN_POST_PATTERN);
 
   /** A slideshow post will never gain a video format on retry — every other failure is treated as transient. */
   override isRetryableError(err: unknown): boolean {
-    return !this.isSlideshowError(err);
+    return !Instagram.isSlideshowError(err);
   }
 
   override describeError(err: unknown, fallbackRaw?: string): UserFacingError {
-    return this.isSlideshowError(err, fallbackRaw)
+    return Instagram.isSlideshowError(err, fallbackRaw)
       ? { key: "errors.instagramSlideshowNotSupported" }
       : super.describeError(err, fallbackRaw);
   }

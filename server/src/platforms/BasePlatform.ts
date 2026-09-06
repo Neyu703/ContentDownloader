@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { errorMessage } from "../utils.js";
+import { errorMessage, isHttpOrHttps } from "../utils.js";
 import { DownloadLogger } from "../downloadLog.js";
 import { DOWNLOADS_DIR, getYtDlpVersion, isFfmpegAvailable } from "../environment.js";
 import { runYtDlp } from "../ytdlpProcess.js";
@@ -28,7 +28,7 @@ export abstract class BasePlatform implements Platform {
 
   checkAvailability(): void {
     const parsed = new URL(this.url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    if (!isHttpOrHttps(parsed)) {
       throw new Error(`Unsupported URL scheme: ${parsed.protocol}`);
     }
   }
@@ -89,6 +89,15 @@ export abstract class BasePlatform implements Platform {
 
   describeError(err: unknown, fallbackRaw?: string): UserFacingError {
     return { key: "errors.raw", params: { raw: errorMessage(err, fallbackRaw) } };
+  }
+
+  /**
+   * Builds a permanent-failure check from a regex: subclasses use this to flag a known-unretryable
+   * yt-dlp error (e.g. an Instagram slideshow, YouTube's sign-in gate) without each re-implementing
+   * the same match-against-errorMessage boilerplate.
+   */
+  protected static permanentFailureMatcher(pattern: RegExp): (err: unknown, fallbackRaw?: string) => boolean {
+    return (err, fallbackRaw) => pattern.test(errorMessage(err, fallbackRaw));
   }
 
   /** Formats an elapsed duration since `startedAt` (ms epoch) as e.g. "1.8s". */

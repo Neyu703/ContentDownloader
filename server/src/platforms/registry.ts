@@ -1,3 +1,4 @@
+import { isHttpOrHttps } from "../utils.js";
 import { normalizeUrl } from "../url.js";
 import { Instagram } from "./Instagram.js";
 import type { Platform } from "./Platform.js";
@@ -19,7 +20,7 @@ export function detectPlatform(rawUrl: string): Platform | null {
   let hostname: string;
   try {
     const parsedUrl = new URL(normalizedUrl);
-    if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") return null;
+    if (!isHttpOrHttps(parsedUrl)) return null;
     hostname = parsedUrl.hostname;
   } catch {
     return null;

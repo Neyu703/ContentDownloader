@@ -15,12 +15,15 @@ export interface ProgressUpdate {
 const DOWNLOAD_PROGRESS_PATTERN =
   /\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\w+)(?:\s+at\s+([\d.]+\w+\/s|Unknown speed))?(?:\s+ETA\s+(\S+))?/;
 
+const GIB_TO_MIB = 1024;
+const KIB_TO_MIB = 1 / 1024;
+
 export function parseSizeToMB(text: string): number | null {
   const match = text.match(/([\d.]+)\s*(K|M|G)?i?B/i);
   if (!match) return null;
   const value = parseFloat(match[1]);
   const unit = (match[2] ?? "").toUpperCase();
-  const multiplier = unit === "G" ? 1024 : unit === "K" ? 1 / 1024 : 1;
+  const multiplier = unit === "G" ? GIB_TO_MIB : unit === "K" ? KIB_TO_MIB : 1;
   return value * multiplier;
 }
 

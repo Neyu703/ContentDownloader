@@ -1,4 +1,4 @@
-import { errorMessage } from "../utils.js";
+import { BasePlatform } from "./BasePlatform.js";
 import { PlaylistCapableBasePlatform } from "./PlaylistCapableBasePlatform.js";
 import type { UserFacingError } from "./Platform.js";
 
@@ -13,17 +13,15 @@ export class YouTube extends PlaylistCapableBasePlatform {
 
   static readonly HOSTS = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"];
 
-  private isSignInGateError(err: unknown, fallbackRaw?: string): boolean {
-    return SIGN_IN_GATE_PATTERN.test(errorMessage(err, fallbackRaw));
-  }
+  private static readonly isSignInGateError = BasePlatform.permanentFailureMatcher(SIGN_IN_GATE_PATTERN);
 
   /** The known-permanent sign-in gate is never worth retrying; every other failure is treated as transient. */
   override isRetryableError(err: unknown): boolean {
-    return !this.isSignInGateError(err);
+    return !YouTube.isSignInGateError(err);
   }
 
   override describeError(err: unknown, fallbackRaw?: string): UserFacingError {
-    return this.isSignInGateError(err, fallbackRaw)
+    return YouTube.isSignInGateError(err, fallbackRaw)
       ? { key: "errors.signInRequired" }
       : super.describeError(err, fallbackRaw);
   }

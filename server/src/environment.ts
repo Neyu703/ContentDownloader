@@ -50,9 +50,7 @@ export function isFfmpegAvailable(): boolean | null {
   return cachedFfmpegAvailable;
 }
 
-// Surfaces broken pieces of the download chain (yt-dlp, ffmpeg, PO-token script) at startup
-// instead of only as a cryptic error deep inside a job.
-export async function checkEnvironment(): Promise<void> {
+async function checkYtDlpVersion(): Promise<void> {
   try {
     const version = await runYtDlp(["--version"]);
     cachedYtDlpVersion = version.trim();
@@ -60,15 +58,27 @@ export async function checkEnvironment(): Promise<void> {
   } catch (err) {
     console.warn("WARNUNG: yt-dlp nicht erreichbar:", errorMessage(err));
   }
+}
 
+async function checkFfmpegAvailable(): Promise<void> {
   cachedFfmpegAvailable = await checkFfmpeg();
   if (!cachedFfmpegAvailable) {
     console.warn("WARNUNG: ffmpeg wurde nicht gefunden (PATH?). MP3/MP4-Konvertierung wird fehlschlagen.");
   }
+}
 
+function checkPotProviderScript(): void {
   if (!fs.existsSync(POT_PROVIDER_SCRIPT)) {
     console.warn(
       `WARNUNG: PO-Token-Skript fehlt unter ${POT_PROVIDER_SCRIPT}. YouTube-Downloads können mit HTTP 403 fehlschlagen.`
     );
   }
+}
+
+// Surfaces broken pieces of the download chain (yt-dlp, ffmpeg, PO-token script) at startup
+// instead of only as a cryptic error deep inside a job.
+export async function checkEnvironment(): Promise<void> {
+  await checkYtDlpVersion();
+  await checkFfmpegAvailable();
+  checkPotProviderScript();
 }
