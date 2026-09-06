@@ -8,9 +8,12 @@ internal fun nonEmptyTrimmedLines(text: String): List<String> = text.lines().map
 internal fun JSONObject.playlistTitle(): String? =
     optString("playlist_title").takeIf(String::isNotBlank) ?: optString("playlist").takeIf(String::isNotBlank)
 
+/** Parses this string as a JSON object, or null if it isn't valid JSON. */
+internal fun String.toJsonObjectOrNull(): JSONObject? = runCatching { JSONObject(this) }.getOrNull()
+
 /** Parses one JSON object per non-blank output line, skipping any line that isn't valid JSON. */
 internal fun parsePlaylistJsonLines(output: String): List<JSONObject> =
-    nonEmptyTrimmedLines(output).mapNotNull { runCatching { JSONObject(it) }.getOrNull() }
+    nonEmptyTrimmedLines(output).mapNotNull { it.toJsonObjectOrNull() }
 
 /**
  * Shapes one --flat-playlist JSON entry into the Map the JS bridge expects. [defaultThumbnail] is

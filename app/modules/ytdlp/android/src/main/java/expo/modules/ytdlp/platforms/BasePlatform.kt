@@ -5,8 +5,9 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 import expo.modules.ytdlp.DownloadJob
 import expo.modules.ytdlp.DownloadQueue
 import expo.modules.ytdlp.JobMetadata
+import expo.modules.ytdlp.isHttpOrHttps
 import expo.modules.ytdlp.nonEmptyTrimmedLines
-import org.json.JSONObject
+import expo.modules.ytdlp.toJsonObjectOrNull
 
 /** Joins title/thumbnail in a single --print template so fetchMetadata() stays one lightweight yt-dlp call. */
 private const val METADATA_FIELD_SEPARATOR = "|||"
@@ -18,9 +19,9 @@ private const val METADATA_FIELD_SEPARATOR = "|||"
  */
 abstract class BasePlatform(protected val url: String) : Platform {
     override fun checkAvailability() {
-        val scheme = Uri.parse(url).scheme?.lowercase()
-        if (scheme != "http" && scheme != "https") {
-            throw IllegalArgumentException("Unsupported URL scheme: $scheme")
+        val uri = Uri.parse(url)
+        if (!uri.isHttpOrHttps()) {
+            throw IllegalArgumentException("Unsupported URL scheme: ${uri.scheme?.lowercase()}")
         }
     }
 
@@ -57,7 +58,7 @@ abstract class BasePlatform(protected val url: String) : Platform {
             .addOption("--no-playlist")
             .addOption("--no-warnings")
         val output = DownloadQueue.engine.execute(request, job.id, false, null).out
-        val json = nonEmptyTrimmedLines(output).lastOrNull()?.let { runCatching { JSONObject(it) }.getOrNull() }
+        val json = nonEmptyTrimmedLines(output).lastOrNull()?.toJsonObjectOrNull()
             ?: return fallbackTitle
         return pickTitle(
             TitleSource(

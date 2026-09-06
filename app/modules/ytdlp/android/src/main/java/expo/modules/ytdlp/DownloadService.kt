@@ -1,9 +1,6 @@
 package expo.modules.ytdlp
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -11,7 +8,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -22,17 +18,17 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
-private const val CHANNEL_ID = "ytdlp_downloads"
 private const val NOTIFICATION_ID = 4711
-private const val ACTION_CANCEL_ALL = "expo.modules.ytdlp.CANCEL_ALL"
+internal const val ACTION_CANCEL_ALL = "expo.modules.ytdlp.CANCEL_ALL"
 private val WAKELOCK_TIMEOUT_MS = TimeUnit.HOURS.toMillis(3)
 
 /**
  * Keeps the process alive while downloads run, so leaving the app does not freeze or kill them,
- * and mirrors the queue state into a notification.
+ * and mirrors the queue state into a notification (built by [DownloadNotificationPresenter]).
  */
 class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val notificationPresenter by lazy { DownloadNotificationPresenter(this) }
     private var wakeLock: PowerManager.WakeLock? = null
     private var observing = false
     private var inForeground = false
@@ -41,7 +37,7 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
+        notificationPresenter.createChannel()
         wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ytdlp:downloads")
             .apply {
@@ -100,93 +96,12 @@ class DownloadService : Service() {
         stopSelf()
     }
 
-    private fun buildNotification(): Notification {
-        val job = DownloadQueue.activeJob()
-        val queued = DownloadQueue.queuedCount()
-        val percent = job?.progress?.toInt() ?: 0
-        val indeterminate = job?.progress == null
+    private fun buildNotification(): Notification =
+        notificationPresenter.build(DownloadQueue.activeJob(), DownloadQueue.queuedCount())
 
-        val title = job?.title ?: setupPhaseLabel(DownloadQueue.setupPhase)
-        val text = buildString {
-            append(if (job != null) phaseLabel(job.phase) else getString(R.string.notification_please_wait))
-            job?.progress?.let { append(" · ${it.toInt()} %") }
-            job?.etaSeconds?.takeIf { it > 0 }?.let { append(" · ${getString(R.string.notification_eta_suffix, formatEta(it))}") }
-            if (queued > 0) append(" · ${getString(R.string.notification_queue_suffix, queued)}")
-        }
+    internal fun phaseLabel(phase: JobPhase): String = notificationPresenter.phaseLabel(phase)
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .setProgress(100, percent, indeterminate)
-            .addAction(0, getString(R.string.notification_cancel_all), cancelAllIntent())
-
-        openAppIntent()?.let { builder.setContentIntent(it) }
-        return builder.build()
-    }
-
-    internal fun phaseLabel(phase: JobPhase): String = when (phase) {
-        JobPhase.QUEUED -> getString(R.string.phase_queued)
-        JobPhase.FETCHING_INFO -> getString(R.string.phase_fetching_info)
-        JobPhase.DOWNLOADING -> getString(R.string.phase_downloading)
-        JobPhase.CONVERTING -> getString(R.string.phase_converting)
-        JobPhase.MERGING -> getString(R.string.phase_merging)
-        JobPhase.DONE -> getString(R.string.phase_done)
-        JobPhase.ERROR -> getString(R.string.phase_error)
-        JobPhase.CANCELLED -> getString(R.string.phase_cancelled)
-    }
-
-    /** Notification title shown while no job exists yet (one-time setup). Mirrors setup.preparing/setup.updating in app/i18n, but resolved from Android string resources since this renders outside the JS bridge. */
-    internal fun setupPhaseLabel(phase: SetupPhase): String = when (phase) {
-        SetupPhase.UPDATING -> getString(R.string.notification_updating)
-        else -> getString(R.string.notification_preparing)
-    }
-
-    private fun formatEta(seconds: Long): String {
-        val minutes = seconds / 60
-        val rest = seconds % 60
-        return if (minutes > 0) "$minutes:${rest.toString().padStart(2, '0')} min" else "$rest s"
-    }
-
-    private fun cancelAllIntent(): PendingIntent {
-        val intent = Intent(this, DownloadService::class.java).setAction(ACTION_CANCEL_ALL)
-        return PendingIntent.getService(
-            this,
-            1,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-    }
-
-    private fun openAppIntent(): PendingIntent? {
-        val launch = packageManager.getLaunchIntentForPackage(packageName) ?: return null
-        return PendingIntent.getActivity(
-            this,
-            0,
-            launch,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-    }
-
-    private fun notificationManager() =
-        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    private fun createChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = getString(R.string.notification_channel_description)
-            setShowBadge(false)
-        }
-        notificationManager().createNotificationChannel(channel)
-    }
+    internal fun setupPhaseLabel(phase: SetupPhase): String = notificationPresenter.setupPhaseLabel(phase)
 
     companion object {
         fun start(context: Context) {

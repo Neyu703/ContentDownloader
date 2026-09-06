@@ -1,6 +1,7 @@
 package expo.modules.ytdlp
 
 import android.content.Context
+import android.net.Uri
 
 private const val PREFS_NAME = "ytdlp_prefs"
 private const val KEY_DOWNLOADS_FOLDER_URI = "downloadsFolderUri"
@@ -19,3 +20,6 @@ object DownloadsFolderPreference {
         }.apply()
     }
 }
+
+/** [DownloadsFolderPreference.get], parsed to a [Uri], or null the same way `get()` is. */
+internal fun DownloadsFolderPreference.getUri(context: Context): Uri? = get(context)?.let { Uri.parse(it) }

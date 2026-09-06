@@ -1,6 +1,7 @@
 package expo.modules.ytdlp.platforms
 
 import android.net.Uri
+import expo.modules.ytdlp.isHttpOrHttps
 import expo.modules.ytdlp.normalizeUrl
 
 /**
@@ -13,8 +14,7 @@ import expo.modules.ytdlp.normalizeUrl
 fun detectPlatform(rawUrl: String): Platform? {
     val normalizedUrl = normalizeUrl(rawUrl)
     val uri = Uri.parse(normalizedUrl)
-    val scheme = uri.scheme?.lowercase()
-    if (scheme != "http" && scheme != "https") return null
+    if (!uri.isHttpOrHttps()) return null
     val host = uri.host?.lowercase() ?: return null
 
     val platform: Platform = when {

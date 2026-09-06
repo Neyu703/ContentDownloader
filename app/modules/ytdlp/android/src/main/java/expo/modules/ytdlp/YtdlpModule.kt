@@ -33,6 +33,10 @@ class YtdlpModule : Module() {
     private var observerJob: Job? = null
     private var folderPickerLauncher: AppContextActivityResultLauncher<String, Uri?>? = null
 
+    // Every AsyncFunction below runs while the module is attached to a live React context, so this
+    // is never actually null in practice — asserted once here instead of at each call site.
+    private val context: Context get() = appContext.reactContext!!
+
     override fun definition() = ModuleDefinition {
         Name("Ytdlp")
 
@@ -47,7 +51,7 @@ class YtdlpModule : Module() {
         // The explicit "->" is required: a bodies-only lambda is ambiguous between the 0-arg and
         // 1-arg Coroutine overloads.
         AsyncFunction("initialize") Coroutine { ->
-            DownloadQueue.prepare(appContext.reactContext!!)
+            DownloadQueue.prepare(context)
         }
 
         AsyncFunction("getState") {
@@ -55,11 +59,11 @@ class YtdlpModule : Module() {
         }
 
         AsyncFunction("enqueue") { url: String, format: String, quality: String, groupId: String?, groupTitle: String? ->
-            DownloadQueue.enqueue(appContext.reactContext!!, url, format, quality, groupId, groupTitle)
+            DownloadQueue.enqueue(context, url, format, quality, groupId, groupTitle)
         }
 
         AsyncFunction("getPlaylistInfo") Coroutine { url: String, start: Int ->
-            DownloadQueue.getPlaylistInfo(appContext.reactContext!!, url, start)
+            DownloadQueue.getPlaylistInfo(context, url, start)
         }
 
         AsyncFunction("cancel") { id: String ->
@@ -75,11 +79,11 @@ class YtdlpModule : Module() {
         }
 
         AsyncFunction("getDebugLogFile") {
-            DebugLog.writeToFile(appContext.reactContext!!)
+            DebugLog.writeToFile(context)
         }
 
         AsyncFunction("saveToDownloads") { filePath: String, filename: String, mimeType: String ->
-            MediaStoreSaver.saveToDownloads(appContext.reactContext!!, filePath, filename, mimeType)
+            MediaStoreSaver.saveToDownloads(context, filePath, filename, mimeType)
         }
 
         // Opens Android's Storage Access Framework folder picker so the user can choose where
@@ -89,7 +93,6 @@ class YtdlpModule : Module() {
         AsyncFunction("pickDownloadsFolder") Coroutine { ->
             val launcher = folderPickerLauncher ?: return@Coroutine null
             val treeUri = launcher.launch("") ?: return@Coroutine null
-            val context = appContext.reactContext!!
             context.contentResolver.takePersistableUriPermission(treeUri, FOLDER_GRANT_FLAGS)
             DownloadsFolderPreference.set(context, treeUri.toString())
             folderDisplayName(context, treeUri)
@@ -98,19 +101,16 @@ class YtdlpModule : Module() {
         // Null means "using the default public Downloads folder" — both when nothing was ever
         // picked, and (defensively) when a previously picked folder is no longer reachable.
         AsyncFunction("getDownloadsFolderName") {
-            val context = appContext.reactContext!!
-            val treeUriString = DownloadsFolderPreference.get(context) ?: return@AsyncFunction null
-            folderDisplayName(context, Uri.parse(treeUriString))
+            val treeUri = DownloadsFolderPreference.getUri(context) ?: return@AsyncFunction null
+            folderDisplayName(context, treeUri)
         }
 
         AsyncFunction("resetDownloadsFolder") {
-            val context = appContext.reactContext!!
-            val treeUriString = DownloadsFolderPreference.get(context)
-            if (treeUriString != null) {
+            DownloadsFolderPreference.getUri(context)?.let { treeUri ->
                 // Best-effort: the permission may already be gone (folder deleted/moved), which
                 // must not stop the preference itself from being cleared below.
                 runCatching {
-                    context.contentResolver.releasePersistableUriPermission(Uri.parse(treeUriString), FOLDER_GRANT_FLAGS)
+                    context.contentResolver.releasePersistableUriPermission(treeUri, FOLDER_GRANT_FLAGS)
                 }
             }
             DownloadsFolderPreference.set(context, null)

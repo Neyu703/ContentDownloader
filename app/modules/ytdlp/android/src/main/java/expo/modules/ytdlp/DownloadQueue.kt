@@ -41,15 +41,6 @@ private const val OUTPUT_DIR_NAME = "ytdlp"
 private const val MAX_ATTEMPTS = 3
 private const val RETRY_DELAY_MS = 2000L
 
-/** Characters not allowed in a filename on common filesystems. */
-private val ILLEGAL_FILENAME_CHARS = Regex("[\\\\/:*?\"<>|]")
-
-/** Characters that require quoting a shell argument for the reproducible command in the debug log. */
-private val SHELL_SPECIAL_CHARS = Regex("[\\s\"'\$`\\\\]")
-
-/** Characters that need a backslash escape inside a quoted shell argument. */
-private val SHELL_ESCAPE_CHARS = Regex("[\"\\\\\$`]")
-
 /**
  * Owns every download, independent of whether any UI is attached. Lives in the application process,
  * kept alive by [DownloadService] while work is pending, so downloads survive leaving the app.
@@ -295,7 +286,7 @@ object DownloadQueue {
         val outputTemplate = File(outputDir, "${job.id}.%(ext)s").absolutePath
         val options = platform.requestOptions(job, outputTemplate)
         val request = buildRequestFrom(job.url, options)
-        DebugLog.add("job ${job.id}: command: yt-dlp ${quoteCommand(options, job.url)}")
+        DebugLog.add("job ${job.id}: command: yt-dlp ${ShellCommandFormatter.quoteCommand(options, job.url)}")
         engine.execute(request, job.id, false) { progress, eta, line ->
             onOutput(job, progress, eta, line)
         }
@@ -306,7 +297,7 @@ object DownloadQueue {
         }
         // yt-dlp names the file by job id (a UUID); rename to the video title so both the
         // share sheet and the save-to-Downloads flow offer a real, human filename.
-        job.filePath = renameToTitledFile(produced, job.title ?: job.url, ext).absolutePath
+        job.filePath = FileNaming.renameToTitledFile(produced, job.title ?: job.url, ext).absolutePath
         job.progress = 100.0
         job.etaSeconds = 0
     }
@@ -347,39 +338,6 @@ object DownloadQueue {
                 attempt++
             }
         }
-    }
-
-    /** Quotes one shell argument, only when it actually contains a character that needs it. */
-    private fun quoteShellArg(arg: String): String =
-        if (SHELL_SPECIAL_CHARS.containsMatchIn(arg)) "\"${SHELL_ESCAPE_CHARS.replace(arg) { "\\${it.value}" }}\"" else arg
-
-    /** Quotes a yt-dlp request's options (plus the target URL) into one copy-pasteable shell command, for the debug log. */
-    private fun quoteCommand(options: List<Pair<String, String?>>, url: String): String {
-        val tokens = options.flatMap { (flag, value) -> if (value != null) listOf(flag, value) else listOf(flag) } + url
-        return tokens.joinToString(" ") { quoteShellArg(it) }
-    }
-
-    /** Mirrors sanitizeFilename() in server/src/index.ts and app/App.tsx. */
-    internal fun sanitizeFilename(name: String): String {
-        val cleaned = name.replace(ILLEGAL_FILENAME_CHARS, "").trim()
-        return cleaned.ifEmpty { "download" }
-    }
-
-    /**
-     * Renames the yt-dlp output (named by job id) to a human filename, deduping on collision.
-     * Serialized on [lock] — MAX_PARALLEL lets two jobs finish at once, and without a lock two
-     * jobs picking the same title could both pass the exists() check before either renames,
-     * causing the second rename to silently overwrite the first job's file.
-     */
-    internal fun renameToTitledFile(source: File, title: String, ext: String): File = synchronized(lock) {
-        val base = sanitizeFilename(title)
-        var candidate = File(source.parentFile, "$base.$ext")
-        var suffix = 2
-        while (candidate.exists() && candidate != source) {
-            candidate = File(source.parentFile, "$base ($suffix).$ext")
-            suffix++
-        }
-        return@synchronized if (candidate == source || source.renameTo(candidate)) candidate else source
     }
 
     internal fun onOutput(job: DownloadJob, progress: Float, eta: Long, line: String) {
