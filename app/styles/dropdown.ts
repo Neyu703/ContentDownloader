@@ -1,4 +1,4 @@
-import { noSelect } from "./layout";
+import { noSelect, RADIUS_MD } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
 export function makeDropdownStyles(colors: ThemeColors) {
@@ -7,7 +7,7 @@ export function makeDropdownStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.borderStrong,
       backgroundColor: colors.inputBackground,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       padding: 12,
       flexDirection: "row",
       alignItems: "center",

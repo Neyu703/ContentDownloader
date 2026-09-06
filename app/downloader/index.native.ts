@@ -3,6 +3,11 @@ import Ytdlp, { type NativeJob, type NativeState } from "../modules/ytdlp";
 import type { Downloader, DownloadRequest, JobState, SetupState } from "./types";
 import { mimeTypeForExt, sanitizeFilename, toFileUri } from "../lib/format";
 
+/** Narrows a native bridge's loosely-typed params object to the shape JobState/SetupState expect. */
+function toParams(params: Record<string, unknown> | null): Record<string, string | number> | undefined {
+  return (params as Record<string, string | number> | null) ?? undefined;
+}
+
 function toJobState(job: NativeJob): JobState {
   return {
     id: job.id,
@@ -16,11 +21,11 @@ function toJobState(job: NativeJob): JobState {
     etaSeconds: job.etaSeconds,
     lastLine: job.lastLine,
     lastLineKey: job.lastLineKey ?? undefined,
-    lastLineParams: (job.lastLineParams as Record<string, string | number> | null) ?? undefined,
+    lastLineParams: toParams(job.lastLineParams),
     result: job.filePath,
     ext: job.ext,
     errorKey: job.error ?? undefined,
-    errorParams: (job.errorParams as Record<string, string | number> | null) ?? undefined,
+    errorParams: toParams(job.errorParams),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     groupId: job.groupId,
@@ -32,7 +37,7 @@ function toSetupState(state: NativeState["setup"]): SetupState {
   return {
     phase: state.phase,
     message: state.message,
-    messageParams: (state.messageParams as Record<string, string | number> | null) ?? undefined,
+    messageParams: toParams(state.messageParams),
   };
 }
 

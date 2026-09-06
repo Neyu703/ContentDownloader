@@ -37,6 +37,8 @@ export const de = {
     logPrepareFailed: "Log konnte nicht vorbereitet werden.",
     debugLogSend: "Debug-Log senden",
     debugLogPreparing: "Bereite Log vor…",
+    debugLogSubject: "Content Downloader – Debug-Log",
+    debugLogBody: "Log im Anhang.",
     clearFinished: "Fertige entfernen",
     groupProgress: "{{title}} — {{done}}/{{total}} fertig",
     defaultPlaylistTitle: "Playlist",

@@ -6,6 +6,24 @@ import type { ThemeColors } from "../theme/colors";
 // button doesn't highlight its text like a text selection.
 export const noSelect = Platform.select({ web: { userSelect: "none" as const }, default: {} });
 
+// Shared corner radius used across buttons/inputs/badges in dropdown.ts, form.ts, and jobCard.ts.
+export const RADIUS_MD = 8;
+
+// Shared modal card shell used by changelog.ts and playlist.ts.
+export function modalCard(colors: ThemeColors) {
+  return {
+    width: "100%",
+    maxWidth: 480,
+    height: "85%",
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    padding: 20,
+    gap: 10,
+  } as const;
+}
+
 export function makeLayoutStyles(colors: ThemeColors) {
   return {
     page: {

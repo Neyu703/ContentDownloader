@@ -1,4 +1,4 @@
-import { noSelect } from "./layout";
+import { noSelect, RADIUS_MD } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
 export function makeFormStyles(colors: ThemeColors) {
@@ -15,7 +15,7 @@ export function makeFormStyles(colors: ThemeColors) {
       borderColor: colors.borderStrong,
       backgroundColor: colors.inputBackground,
       color: colors.textPrimary,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       padding: 12,
       fontSize: 15,
       minHeight: 46,
@@ -24,7 +24,7 @@ export function makeFormStyles(colors: ThemeColors) {
     },
     pasteButton: {
       backgroundColor: colors.borderStrong,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       width: 46,
       height: 46,
       alignItems: "center",
@@ -74,7 +74,7 @@ export function makeFormStyles(colors: ThemeColors) {
     },
     button: {
       backgroundColor: colors.accent,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       padding: 12,
       alignItems: "center",
     },
@@ -89,7 +89,7 @@ export function makeFormStyles(colors: ThemeColors) {
     },
     secondaryButton: {
       backgroundColor: colors.borderStrong,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       paddingVertical: 10,
       paddingHorizontal: 14,
       alignItems: "center",

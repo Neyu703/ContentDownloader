@@ -1,4 +1,5 @@
 import i18n from "../i18n";
+import { isFinishedPhase } from "../lib/format";
 import type { Downloader, DownloadRequest, JobPhase, JobState, PlaylistInfo, PreviewPatch, SetupState, VideoInfo } from "./types";
 
 const SERVER_URL = "http://localhost:3001";
@@ -76,6 +77,13 @@ async function parseErrorKeyParams(res: Response): Promise<ParsedError> {
 async function parseError(res: Response): Promise<string> {
   const { errorKey, errorParams } = await parseErrorKeyParams(res);
   return i18n.t(errorKey, errorParams);
+}
+
+/** Fetches JSON from the local server, throwing a translated error on a non-ok response. */
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${SERVER_URL}${path}`, init);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<T>;
 }
 
 const READY_SETUP: SetupState = { phase: "ready", message: "" };
@@ -168,17 +176,14 @@ export const downloader: Downloader = {
 
   async enqueue(request: DownloadRequest) {
     if (!(await isServerReachable())) {
-      throw new Error(`Server nicht erreichbar unter ${SERVER_URL}. Bitte "pnpm dev:server" starten.`);
+      throw new Error(i18n.t("errors.serverUnreachable", { serverUrl: SERVER_URL }));
     }
 
-    const res = await fetch(`${SERVER_URL}/api/convert`, {
+    const { jobId } = await fetchJson<{ jobId: string }>("/api/convert", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(request),
     });
-    if (!res.ok) throw new Error(await parseError(res));
-
-    const { jobId } = await res.json();
     const now = Date.now();
     jobs.set(jobId, {
       id: jobId,
@@ -205,17 +210,11 @@ export const downloader: Downloader = {
   },
 
   async getVideoInfo(url: string, signal?: AbortSignal) {
-    const res = await fetch(`${SERVER_URL}/api/info?url=${encodeURIComponent(url)}`, { signal });
-    if (!res.ok) throw new Error(await parseError(res));
-    return (await res.json()) as VideoInfo;
+    return fetchJson<VideoInfo>(`/api/info?url=${encodeURIComponent(url)}`, { signal });
   },
 
   async getPlaylistInfo(url: string, start: number) {
-    const res = await fetch(
-      `${SERVER_URL}/api/playlist-info?url=${encodeURIComponent(url)}&start=${start}`
-    );
-    if (!res.ok) throw new Error(await parseError(res));
-    return (await res.json()) as PlaylistInfo;
+    return fetchJson<PlaylistInfo>(`/api/playlist-info?url=${encodeURIComponent(url)}&start=${start}`);
   },
 
   updateJobPreview(id, info: PreviewPatch) {
@@ -239,6 +238,8 @@ export const downloader: Downloader = {
   },
 
   removeJob(id: string) {
+    const job = jobs.get(id);
+    if (!job || !isFinishedPhase(job.phase)) return;
     stopPolling(id);
     jobs.delete(id);
     notify();
@@ -246,9 +247,7 @@ export const downloader: Downloader = {
 
   clearFinished() {
     for (const [id, job] of jobs) {
-      if (job.phase === "done" || job.phase === "error" || job.phase === "cancelled") {
-        jobs.delete(id);
-      }
+      if (isFinishedPhase(job.phase)) jobs.delete(id);
     }
     notify();
   },

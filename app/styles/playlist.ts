@@ -1,19 +1,9 @@
-import { noSelect } from "./layout";
+import { noSelect, modalCard } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
 export function makePlaylistStyles(colors: ThemeColors) {
   return {
-    playlistModal: {
-      width: "100%",
-      maxWidth: 480,
-      height: "85%",
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      padding: 20,
-      gap: 10,
-    },
+    playlistModal: { ...modalCard(colors) },
     playlistModalTitle: {
       color: colors.textPrimary,
       fontWeight: "700",

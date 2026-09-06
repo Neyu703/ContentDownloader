@@ -1,6 +1,12 @@
 import { Platform } from "react-native";
-import { noSelect } from "./layout";
+import { noSelect, RADIUS_MD } from "./layout";
 import type { ThemeColors } from "../theme/colors";
+
+// Deliberately theme-invariant: this badge sits on top of the job's own video thumbnail, not app
+// chrome, so it stays a dark translucent badge with light text in both themes for legibility
+// against unpredictable thumbnail brightness.
+const BADGE_OVERLAY_BG = "rgba(13,13,13,0.75)";
+const BADGE_OVERLAY_TEXT = "#f0f0f0";
 
 export function makeJobCardStyles(colors: ThemeColors) {
   return {
@@ -100,28 +106,25 @@ export function makeJobCardStyles(colors: ThemeColors) {
       backgroundColor: colors.accent,
       borderRadius: 4,
     },
-    // Deliberately theme-invariant: this badge sits on top of the job's own video thumbnail, not
-    // app chrome, so it stays a dark translucent badge with light text in both themes for
-    // legibility against unpredictable thumbnail brightness.
     progressEtaBadge: {
       position: "absolute",
       right: 4,
       top: "50%",
       transform: [{ translateY: -8 }],
-      backgroundColor: "rgba(13,13,13,0.75)",
-      borderRadius: 8,
+      backgroundColor: BADGE_OVERLAY_BG,
+      borderRadius: RADIUS_MD,
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
     progressEtaText: {
-      color: "#f0f0f0",
+      color: BADGE_OVERLAY_TEXT,
       fontSize: 10,
       fontWeight: "600",
     },
     debugBox: {
       width: "100%",
       backgroundColor: colors.inputBackground,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       borderWidth: 1,
       borderColor: colors.border,
       padding: 10,
@@ -134,7 +137,7 @@ export function makeJobCardStyles(colors: ThemeColors) {
     },
     downloadButton: {
       backgroundColor: colors.success,
-      borderRadius: 8,
+      borderRadius: RADIUS_MD,
       paddingVertical: 10,
       paddingHorizontal: 18,
     },

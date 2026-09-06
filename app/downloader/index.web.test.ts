@@ -493,13 +493,36 @@ describe("removeJob", () => {
     expect(() => downloader.removeJob("never-existed")).not.toThrow();
   });
 
-  it("stops polling, removes the job, and notifies", async () => {
+  it("is a no-op for a still-active (not yet finished) job", async () => {
     const downloader = freshDownloader();
     jest
       .mocked(fetch)
       .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
       .mockResolvedValueOnce(jsonResponse({ jobId: "job-1" }));
     await downloader.enqueue({ url: "u", format: "audio", quality: "320" });
+    const listener = jest.fn();
+    downloader.subscribe(listener);
+    listener.mockClear();
+
+    downloader.removeJob("job-1");
+    expect(listener).not.toHaveBeenCalled();
+
+    // The job must still be polling — removeJob() didn't stop it.
+    jest.mocked(fetch).mockClear().mockResolvedValueOnce(jsonResponse({ stage: "downloading", progress: 5 }));
+    await jest.advanceTimersByTimeAsync(600);
+    expect(fetch).toHaveBeenCalled();
+  });
+
+  it("stops polling, removes a finished job, and notifies", async () => {
+    const downloader = freshDownloader();
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
+      .mockResolvedValueOnce(jsonResponse({ jobId: "job-1" }))
+      .mockResolvedValueOnce(jsonResponse({ stage: "error", errorKey: "errors.unknown" }));
+    await downloader.enqueue({ url: "u", format: "audio", quality: "320" });
+    await jest.advanceTimersByTimeAsync(600); // let the poll resolve the job to "error"
+
     const listener = jest.fn();
     downloader.subscribe(listener);
     listener.mockClear();

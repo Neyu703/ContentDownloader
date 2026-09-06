@@ -11,8 +11,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import Constants from "expo-constants";
-import * as MailComposer from "expo-mail-composer";
 import * as Sharing from "expo-sharing";
 import { useTranslation } from "react-i18next";
 import { downloader } from "../downloader";
@@ -26,10 +24,12 @@ import {
 import { Dropdown } from "../components/Dropdown";
 import { JobCard } from "../components/JobCard";
 import { PlaylistPickerModal } from "../components/PlaylistPickerModal";
+import { useDebugLog } from "../hooks/useDebugLog";
 import { usePreview } from "../hooks/usePreview";
 import { usePlaylistPicker, type SubmitFn } from "../hooks/usePlaylistPicker";
 import {
   formatDuration,
+  hasPositiveDuration,
   isFinishedPhase,
   isSetupMessagePhase,
   mimeTypeForExt,
@@ -54,6 +54,22 @@ const DEFAULT_QUALITY: Record<MediaFormat, string> = {
   video: "best",
 };
 
+/**
+ * Tallies each playlist group's done/total counts in one pass, so consecutive jobs sharing a
+ * groupId get one summary header above their cards instead of each card repeating the playlist title.
+ */
+function computeGroupStats(jobs: JobState[]): Map<string, { total: number; done: number }> {
+  const groupStats = new Map<string, { total: number; done: number }>();
+  for (const job of jobs) {
+    if (!job.groupId) continue;
+    const stats = groupStats.get(job.groupId) ?? { total: 0, done: 0 };
+    stats.total += 1;
+    if (job.phase === "done") stats.done += 1;
+    groupStats.set(job.groupId, stats);
+  }
+  return groupStats;
+}
+
 /** Ticks every second while any job is active, purely to keep "vor Xs" / elapsed labels live. */
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -77,7 +93,7 @@ export function HomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
-  const [isSendingLog, setIsSendingLog] = useState(false);
+  const { isSendingLog, sendLog } = useDebugLog(setSubmitError);
   const { preview, isPreviewLoading, getPendingInfo } = usePreview(url);
 
   // Re-render on every keystroke and every 1s progress tick (via useNow below) — memoized so
@@ -252,32 +268,6 @@ export function HomeScreen() {
     }
   }
 
-  async function handleSendLog() {
-    // Defensive only: the triggering button is never rendered without getDebugLogFileUri, and is
-    // disabled while isSendingLog is true, so neither side of this guard is reachable via a real press.
-    /* istanbul ignore next */
-    if (!downloader.getDebugLogFileUri || isSendingLog) return;
-    setIsSendingLog(true);
-    try {
-      const fileUri = await downloader.getDebugLogFileUri();
-      if (!(await MailComposer.isAvailableAsync())) {
-        setSubmitError(t("home.noMailAppConfigured"));
-        return;
-      }
-      const recipient = Constants.expoConfig?.extra?.debugLogEmail as string | undefined;
-      await MailComposer.composeAsync({
-        recipients: recipient ? [recipient] : undefined,
-        subject: "Content Downloader – Debug-Log",
-        body: "Log im Anhang.",
-        attachments: [fileUri],
-      });
-    } catch {
-      setSubmitError(t("home.logPrepareFailed"));
-    } finally {
-      setIsSendingLog(false);
-    }
-  }
-
   async function handleShare(job: JobState, filenameOverride?: string) {
     if (!job.result) return;
     setSharingId(job.id);
@@ -331,7 +321,9 @@ export function HomeScreen() {
             <Text style={styles.previewTitle} numberOfLines={2}>
               {preview.info.title}
             </Text>
-            {preview.info.duration > 0 && <Text style={styles.previewMeta}>{formatDuration(preview.info.duration)}</Text>}
+            {hasPositiveDuration(preview.info.duration) && (
+              <Text style={styles.previewMeta}>{formatDuration(preview.info.duration)}</Text>
+            )}
           </View>
         </View>
       )}
@@ -364,17 +356,7 @@ export function HomeScreen() {
     </>
   );
 
-  // Consecutive jobs sharing a groupId (a playlist download) get one summary header above their
-  // cards instead of each card repeating the playlist title. One pass to tally each group's
-  // done/total counts, then one render pass, instead of re-filtering the whole list per group.
-  const groupStats = new Map<string, { total: number; done: number }>();
-  for (const job of jobs) {
-    if (!job.groupId) continue;
-    const stats = groupStats.get(job.groupId) ?? { total: 0, done: 0 };
-    stats.total += 1;
-    if (job.phase === "done") stats.done += 1;
-    groupStats.set(job.groupId, stats);
-  }
+  const groupStats = computeGroupStats(jobs);
 
   const renderedJobs: ReactNode[] = [];
   const seenGroupIds = new Set<string>();
@@ -444,7 +426,7 @@ export function HomeScreen() {
         )}
 
         {downloader.getDebugLogFileUri && (
-          <Pressable style={styles.linkButton} onPress={handleSendLog} disabled={isSendingLog}>
+          <Pressable style={styles.linkButton} onPress={sendLog} disabled={isSendingLog}>
             <Text style={styles.linkText}>{isSendingLog ? t("home.debugLogPreparing") : t("home.debugLogSend")}</Text>
           </Pressable>
         )}

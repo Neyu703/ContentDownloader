@@ -1,29 +1,23 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Localization from "expo-localization";
+import { createPersistedSetting } from "../lib/persistedSetting";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "./index";
 
 export type LanguageSetting = "system" | SupportedLanguage;
-
-const STORAGE_KEY = "contentdownloader.languageSetting";
 
 function isSupportedLanguage(value: string): value is SupportedLanguage {
   return (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
 }
 
-function isLanguageSetting(value: string | null): value is LanguageSetting {
-  return value === "system" || (value !== null && isSupportedLanguage(value));
-}
+const languageSetting = createPersistedSetting<LanguageSetting>("contentdownloader.languageSetting", {
+  fallback: "system",
+  parse: (raw) => (raw === "system" || isSupportedLanguage(raw) ? (raw as LanguageSetting) : null),
+});
 
 /** Reads the user's saved language preference, defaulting to "system" if none was ever saved. */
-export async function loadLanguageSetting(): Promise<LanguageSetting> {
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
-  return isLanguageSetting(stored) ? stored : "system";
-}
+export const loadLanguageSetting = languageSetting.load;
 
 /** Persists the user's language preference for future launches. */
-export async function saveLanguageSetting(setting: LanguageSetting): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, setting);
-}
+export const saveLanguageSetting = languageSetting.save;
 
 /** Picks the first device locale that's a supported language, falling back to English. */
 export function resolveSystemLanguage(): SupportedLanguage {

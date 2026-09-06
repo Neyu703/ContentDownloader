@@ -36,6 +36,8 @@ export const en: typeof de = {
     logPrepareFailed: "Couldn't prepare the log.",
     debugLogSend: "Send debug log",
     debugLogPreparing: "Preparing log…",
+    debugLogSubject: "Content Downloader – Debug Log",
+    debugLogBody: "Log attached.",
     clearFinished: "Clear finished",
     groupProgress: "{{title}} — {{done}}/{{total}} done",
     defaultPlaylistTitle: "Playlist",

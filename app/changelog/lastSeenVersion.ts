@@ -1,16 +1,17 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createPersistedSetting } from "../lib/persistedSetting";
 
-const STORAGE_KEY = "contentdownloader.lastSeenVersion";
+const lastSeenVersionSetting = createPersistedSetting<string | null>("contentdownloader.lastSeenVersion", {
+  fallback: null,
+  parse: (raw) => raw,
+  // save() is only ever called via setLastSeenVersion(version: string) below, never with null.
+  serialize: (value) => value!,
+});
 
 /** Reads the last app version the user has seen the changelog for, or null if never recorded. */
-export async function getLastSeenVersion(): Promise<string | null> {
-  return AsyncStorage.getItem(STORAGE_KEY);
-}
+export const getLastSeenVersion = lastSeenVersionSetting.load;
 
 /** Records the given version as seen. */
-export async function setLastSeenVersion(version: string): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, version);
-}
+export const setLastSeenVersion = (version: string): Promise<void> => lastSeenVersionSetting.save(version);
 
 /**
  * Compares the persisted last-seen version against the current build version, always persisting

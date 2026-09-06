@@ -6,11 +6,5 @@ export function makeNavigationStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
       borderTopColor: colors.border,
     },
-    tabBarActiveColor: {
-      color: colors.accent,
-    },
-    tabBarInactiveColor: {
-      color: colors.textMuted,
-    },
   } as const;
 }

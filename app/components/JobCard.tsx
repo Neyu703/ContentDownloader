@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Easing, Image, Pressable, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Image, Pressable, Text, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { type JobState } from "../downloader/types";
+import { useJobSave } from "../hooks/useJobSave";
 import {
   estimateAudioSizeMB,
   formatDuration,
@@ -18,6 +19,7 @@ const STALL_HINT_MS = 20_000;
 // Progress bar fallback while yt-dlp hasn't reported a real percentage yet.
 const FALLBACK_PROGRESS_MERGING = 90;
 const FALLBACK_PROGRESS_ACTIVE = 10;
+const DETAILS_COLLAPSE_DURATION_MS = 220;
 
 export function JobCard({
   job,
@@ -40,9 +42,9 @@ export function JobCard({
 }) {
   const styles = useStyles();
   const { t } = useTranslation();
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   // User-edited filename for a finished job, overriding the auto-picked title — null until touched.
   const [customName, setCustomName] = useState<string | null>(null);
+  const { saveState, handleSavePress } = useJobSave(onSave, customName);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [debugBoxHeight, setDebugBoxHeight] = useState(0);
   const detailsAnim = useRef(new Animated.Value(1)).current;
@@ -78,41 +80,11 @@ export function JobCard({
   useEffect(() => {
     Animated.timing(detailsAnim, {
       toValue: isDetailsExpanded ? 1 : 0,
-      duration: 220,
+      duration: DETAILS_COLLAPSE_DURATION_MS,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false, // height/margin can't run on the native driver
     }).start();
   }, [isDetailsExpanded, detailsAnim]);
-
-  // Only ever called while the save button is mounted, which itself requires `onSave` — see the
-  // `job.phase === "done" && onSave && (...)` guard around that button below.
-  async function doSave() {
-    setSaveState("saving");
-    try {
-      await onSave!(customName ?? undefined);
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
-    }
-  }
-
-  function handleSavePress() {
-    // The save button is `disabled` while saving, so normal touch input can't reach this; kept as
-    // a defensive guard against non-standard triggers (e.g. an accessibility action bypassing the
-    // disabled state) — not reachable via fireEvent.press in tests, hence the coverage exclusion.
-    /* istanbul ignore next */
-    if (saveState === "saving") return;
-    if (saveState === "saved") {
-      // Prevents the case that prompted this: tapping "speichern" twice creates two files in
-      // Downloads (MediaStore auto-dedupes the name instead of overwriting).
-      Alert.alert(t("jobCard.alreadySavedTitle"), t("jobCard.alreadySavedBody"), [
-        { text: t("jobCard.alreadySavedCancel"), style: "cancel" },
-        { text: t("jobCard.alreadySavedConfirm"), onPress: doSave },
-      ]);
-      return;
-    }
-    doSave();
-  }
 
   return (
     <View style={styles.jobCard}>

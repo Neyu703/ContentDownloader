@@ -19,8 +19,8 @@ export function RootTabs() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: navigationStyles.tabBar,
-        tabBarActiveTintColor: navigationStyles.tabBarActiveColor.color,
-        tabBarInactiveTintColor: navigationStyles.tabBarInactiveColor.color,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: t("navigation.home") }} />
