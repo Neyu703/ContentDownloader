@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Vitest 4's defaultExclude no longer skips dist/ — without this, stale compiled test
+    // output runs alongside src/ and races it over shared fixture files on disk.
+    exclude: ["**/node_modules/**", "**/dist/**"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
