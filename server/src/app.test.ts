@@ -5,8 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 vi.mock("./platforms/registry.js", () => ({ detectPlatform: vi.fn() }));
+// The real functions already write to server/data/cookies.txt — a path shared with a locally
+// running dev server's actual imported cookies. Mocked here so this test file never touches that
+// real file (confirmed the hard way: a host-side test run once deleted a real cookies.txt while
+// the Docker dev server had one imported, since both share the same bind-mounted directory).
+vi.mock("./cookies.js", () => ({
+  saveCookies: vi.fn(),
+  deleteCookies: vi.fn(),
+  getCookiesStatus: vi.fn(),
+}));
 
 import { app } from "./app.js";
+import { deleteCookies, getCookiesStatus, saveCookies } from "./cookies.js";
 import { detectPlatform } from "./platforms/registry.js";
 import { DOWNLOADS_DIR } from "./environment.js";
 import type { Platform } from "./platforms/Platform.js";
@@ -55,6 +65,62 @@ describe("GET /api/ping", () => {
     const res = await request(app).get("/api/ping");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, service: "content-downloader-server" });
+  });
+});
+
+describe("/api/cookies", () => {
+  it("reports the current status", async () => {
+    vi.mocked(getCookiesStatus).mockReturnValueOnce({ present: false, updatedAt: null });
+    const res = await request(app).get("/api/cookies");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ present: false, updatedAt: null });
+  });
+
+  it("rejects an empty cookies body", async () => {
+    const res = await request(app).post("/api/cookies").send({ cookies: "  " });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ errorKey: "errors.cookiesEmpty" });
+    expect(saveCookies).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-string cookies body", async () => {
+    const res = await request(app).post("/api/cookies").send({ cookies: 123 });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ errorKey: "errors.cookiesEmpty" });
+    expect(saveCookies).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body over the size limit before it ever reaches saveCookies", async () => {
+    const oversized = "x".repeat(600 * 1024);
+    const res = await request(app).post("/api/cookies").send({ cookies: oversized });
+    expect(res.status).toBe(413);
+    expect(saveCookies).not.toHaveBeenCalled();
+  });
+
+  it("stores cookies and logs the import", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const importRes = await request(app).post("/api/cookies").send({ cookies: "# Netscape HTTP Cookie File\n" });
+
+    expect(importRes.status).toBe(200);
+    expect(importRes.body).toEqual({ ok: true });
+    expect(saveCookies).toHaveBeenCalledWith("# Netscape HTTP Cookie File\n");
+    expect(consoleLog).toHaveBeenCalledWith(expect.stringContaining("Cookies importiert"));
+
+    consoleLog.mockRestore();
+  });
+
+  it("removes cookies and logs the removal", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const deleteRes = await request(app).delete("/api/cookies");
+
+    expect(deleteRes.status).toBe(200);
+    expect(deleteRes.body).toEqual({ ok: true });
+    expect(deleteCookies).toHaveBeenCalled();
+    expect(consoleLog).toHaveBeenCalledWith("Cookies entfernt");
+
+    consoleLog.mockRestore();
   });
 });
 

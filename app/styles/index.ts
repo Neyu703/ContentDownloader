@@ -6,6 +6,7 @@ import { makeDropdownStyles } from "./dropdown";
 import { makeJobCardStyles } from "./jobCard";
 import { makePlaylistStyles } from "./playlist";
 import { makeChangelogStyles } from "./changelog";
+import { makeCookieImportStyles } from "./cookieImport";
 
 export function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -15,5 +16,6 @@ export function makeStyles(colors: ThemeColors) {
     ...makeJobCardStyles(colors),
     ...makePlaylistStyles(colors),
     ...makeChangelogStyles(colors),
+    ...makeCookieImportStyles(colors),
   });
 }

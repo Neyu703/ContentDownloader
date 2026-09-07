@@ -53,7 +53,7 @@ nach Aufwand sortiert, klein → groß.
 - [ ] **[1-8] Live-Stream-Mitschnitt** — yt-dlp kann laufende Livestreams von Beginn des Anschauens an
   aufzeichnen (`--live-from-start`); eigener Job-Typ ohne bekannte Gesamtlänge/Fortschritt.
   **Aufwand: mittel–groß**.
-- [ ] **[1-9] YouTube-Cookie-Authentifizierung gegen "Sign in to confirm"-Gate** — YouTube verlangt bei
+- [x] **[1-9] YouTube-Cookie-Authentifizierung gegen "Sign in to confirm"-Gate** — YouTube verlangt bei
   einem unvorhersehbaren Teil der Videos inzwischen eine echte Login-Session statt nur eines
   PO-Tokens (bestätigt 2026-08-20 anhand Job-Logs: gleicher Tag, ein Video scheitert mit der Gate,
   andere laufen normal durch — kein Totalausfall, aber auch kein Fall, den yt-dlp wie das

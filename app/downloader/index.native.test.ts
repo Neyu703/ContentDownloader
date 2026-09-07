@@ -375,3 +375,29 @@ describe("resetDownloadsFolder", () => {
     expect(mockYtdlp.resetDownloadsFolder).toHaveBeenCalled();
   });
 });
+
+describe("importCookies / getCookiesStatus / clearCookies", () => {
+  it("importCookies forwards the cookies text to the native module", async () => {
+    const downloader = freshDownloader();
+    await downloader.importCookies("# Netscape HTTP Cookie File\n");
+    expect(mockYtdlp.importCookies).toHaveBeenCalledWith("# Netscape HTTP Cookie File\n");
+  });
+
+  it("getCookiesStatus reports present with no date when cookies are stored", async () => {
+    mockYtdlp.hasCookies.mockResolvedValueOnce(true);
+    const downloader = freshDownloader();
+    await expect(downloader.getCookiesStatus()).resolves.toEqual({ present: true, updatedAt: null });
+  });
+
+  it("getCookiesStatus reports absent when no cookies are stored", async () => {
+    mockYtdlp.hasCookies.mockResolvedValueOnce(false);
+    const downloader = freshDownloader();
+    await expect(downloader.getCookiesStatus()).resolves.toEqual({ present: false, updatedAt: null });
+  });
+
+  it("clearCookies removes the stored cookies file", async () => {
+    const downloader = freshDownloader();
+    await downloader.clearCookies();
+    expect(mockYtdlp.clearCookies).toHaveBeenCalled();
+  });
+});

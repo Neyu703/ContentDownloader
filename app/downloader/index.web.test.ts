@@ -367,6 +367,44 @@ describe("getVideoInfo / getPlaylistInfo", () => {
   });
 });
 
+describe("importCookies / getCookiesStatus / clearCookies", () => {
+  it("importCookies posts the cookies text as JSON", async () => {
+    const downloader = freshDownloader();
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ok: true }));
+    await downloader.importCookies("# Netscape HTTP Cookie File\n");
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/cookies"),
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookies: "# Netscape HTTP Cookie File\n" }),
+      })
+    );
+  });
+
+  it("importCookies throws parseError's message on failure", async () => {
+    const downloader = freshDownloader();
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(jsonResponse({ errorKey: "errors.raw", errorParams: { raw: "empty" } }, false));
+    await expect(downloader.importCookies("")).rejects.toThrow("empty");
+  });
+
+  it("getCookiesStatus returns the parsed body on success", async () => {
+    const downloader = freshDownloader();
+    const status = { present: true, updatedAt: "2026-09-07T12:00:00.000Z" };
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse(status));
+    await expect(downloader.getCookiesStatus()).resolves.toEqual(status);
+  });
+
+  it("clearCookies sends a DELETE request", async () => {
+    const downloader = freshDownloader();
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ ok: true }));
+    await downloader.clearCookies();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/api/cookies"), expect.objectContaining({ method: "DELETE" }));
+  });
+});
+
 describe("parseError (indirectly, via a response whose json() throws)", () => {
   it("falls back to the generic message when json() parsing itself fails", async () => {
     const downloader = freshDownloader();

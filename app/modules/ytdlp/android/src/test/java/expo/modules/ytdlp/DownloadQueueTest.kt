@@ -249,6 +249,20 @@ class DownloadQueueTest {
         assertEquals(1, (result["entries"] as List<*>).size)
     }
 
+    @Test
+    fun `getPlaylistInfo passes a stored cookies file into the request`() = runTest {
+        every { engine.version(any()) } returns "2024.1.1"
+        every { engine.execute(any(), any(), any(), null) } returns response("")
+        CookiesStore.save(context, "# Netscape HTTP Cookie File\n")
+
+        try {
+            DownloadQueue.getPlaylistInfo(context, "https://youtu.be/x")
+            verify { engine.execute(match { it.getOption("--cookies") == CookiesStore.path(context) }, any(), any(), null) }
+        } finally {
+            CookiesStore.clear(context)
+        }
+    }
+
     // --- cancel() ---
 
     @Test
@@ -453,6 +467,27 @@ class DownloadQueueTest {
     }
 
     @Test
+    fun `runJob passes a stored cookies file into both the metadata and the download request`() = runTest {
+        val job = DownloadJob("id-1", "https://youtu.be/x", "audio", "320")
+        every { engine.execute(any(), any(), any(), null) } returns response("My Video Title")
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
+            val request = firstArg<YoutubeDLRequest>()
+            File(request.getOption("-o")!!.replace("%(ext)s", "mp3")).apply { writeText("audio-bytes") }
+            response("")
+        }
+        CookiesStore.save(context, "# Netscape HTTP Cookie File\n")
+
+        try {
+            DownloadQueue.runJob(context, job)
+            val cookiesPath = CookiesStore.path(context)
+            verify { engine.execute(match { it.getOption("--cookies") == cookiesPath }, any(), any(), null) }
+            verify { engine.execute(match { it.getOption("--cookies") == cookiesPath }, any(), any(), isNull(inverse = true)) }
+        } finally {
+            CookiesStore.clear(context)
+        }
+    }
+
+    @Test
     fun `runJob downloads a video job successfully, using the mp4 extension`() = runTest {
         val job = DownloadJob("id-1", "https://youtu.be/x", "video", "720")
         every { engine.execute(any(), any(), any(), null) } returns response("My Video Title")
@@ -637,6 +672,21 @@ class DownloadQueueTest {
         val logged = DebugLog.snapshot()
         assertTrue(logged.contains("job id-1: command: yt-dlp -f bestaudio/best -x --audio-format mp3"))
         assertTrue(logged.contains(job.url))
+    }
+
+    @Test
+    fun `downloadAndFinalize passes the given cookiesPath into the yt-dlp request`() {
+        val job = DownloadJob("id-1", "https://youtu.be/my-video-id", "audio", "320")
+        every { engine.execute(any(), any(), any(), isNull(inverse = true)) } answers {
+            val request = firstArg<YoutubeDLRequest>()
+            File(request.getOption("-o")!!.replace("%(ext)s", "mp3")).apply { writeText("audio-bytes") }
+            response("")
+        }
+        val outputDir = File(context.cacheDir, "download-finalize-test-${System.nanoTime()}").apply { mkdirs() }
+
+        DownloadQueue.downloadAndFinalize(YouTube(job.url), job, outputDir, "mp3", cookiesPath = "/data/cookies.txt")
+
+        verify { engine.execute(match { it.getOption("--cookies") == "/data/cookies.txt" }, any(), any(), isNull(inverse = true)) }
     }
 
     // buildRequest() moved onto Platform instances — see platforms/BasePlatformTest.kt.

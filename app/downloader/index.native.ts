@@ -147,4 +147,16 @@ export const downloader: Downloader = {
   async resetDownloadsFolder() {
     await Ytdlp.resetDownloadsFolder();
   },
+
+  async importCookies(cookiesText: string) {
+    await Ytdlp.importCookies(cookiesText);
+  },
+
+  async getCookiesStatus() {
+    return { present: await Ytdlp.hasCookies(), updatedAt: null };
+  },
+
+  async clearCookies() {
+    await Ytdlp.clearCookies();
+  },
 };

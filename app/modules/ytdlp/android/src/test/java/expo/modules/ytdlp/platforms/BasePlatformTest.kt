@@ -7,6 +7,7 @@ import expo.modules.ytdlp.RealYtdlpEngine
 import expo.modules.ytdlp.YtdlpEngine
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -174,6 +175,45 @@ class BasePlatformTest {
         val request = tiktok().buildRequest(job, "/out/%(ext)s")
 
         assertEquals("bestvideo+bestaudio/best/best", request.getOption("-f"))
+    }
+
+    // --- cookies ---
+
+    @Test
+    fun `fetchMetadata passes --cookies to the engine when a cookies path is given`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "320")
+        every { engine.execute(match { it.hasOption("--cookies") }, any(), any(), null) } returns response("A Title|||NA")
+
+        tiktok().fetchMetadata(job, cookiesPath = "/data/cookies.txt")
+
+        verify { engine.execute(match { it.getOption("--cookies") == "/data/cookies.txt" }, any(), any(), null) }
+    }
+
+    @Test
+    fun `requestOptions omits --cookies when no cookies path is given`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "192")
+
+        val options = tiktok().requestOptions(job, "/out/%(ext)s")
+
+        assertTrue(options.none { it.first == "--cookies" })
+    }
+
+    @Test
+    fun `requestOptions includes --cookies with the given path`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "192")
+
+        val options = tiktok().requestOptions(job, "/out/%(ext)s", cookiesPath = "/data/cookies.txt")
+
+        assertEquals("/data/cookies.txt", options.find { it.first == "--cookies" }?.second)
+    }
+
+    @Test
+    fun `buildRequest applies --cookies when a cookies path is given`() {
+        val job = DownloadJob("id-1", "https://www.tiktok.com/@someuser/video/123", "audio", "192")
+
+        val request = tiktok().buildRequest(job, "/out/%(ext)s", cookiesPath = "/data/cookies.txt")
+
+        assertEquals("/data/cookies.txt", request.getOption("--cookies"))
     }
 
     // --- isRetryableError / describeError ---

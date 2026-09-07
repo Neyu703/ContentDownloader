@@ -24,12 +24,13 @@ abstract class PlaylistCapableBasePlatform(url: String) : BasePlatform(url), Pla
      * virtualize/infinite-scroll instead of enumerating an entire (potentially thousand-video)
      * playlist upfront.
      */
-    override suspend fun fetchPlaylistInfo(start: Int, count: Int): Map<String, Any?> = withContext(Dispatchers.IO) {
+    override suspend fun fetchPlaylistInfo(start: Int, count: Int, cookiesPath: String?): Map<String, Any?> = withContext(Dispatchers.IO) {
         val request = YoutubeDLRequest(url)
             .addOption("--flat-playlist")
             .addOption("--dump-json")
             .addOption("--no-warnings")
             .addOption("--playlist-items", "$start-${start + count - 1}")
+            .withCookies(cookiesPath)
         val output = DownloadQueue.engine.execute(request, UUID.randomUUID().toString(), false, null).out
         val parsed = parsePlaylistJsonLines(output)
 

@@ -116,6 +116,20 @@ class YtdlpModule : Module() {
             DownloadsFolderPreference.set(context, null)
         }
 
+        // Cookies imported here are read by every yt-dlp invocation (see CookiesStore, DownloadQueue)
+        // once present, letting downloads past YouTube's "sign in to confirm you're not a bot" gate.
+        AsyncFunction("importCookies") { cookiesText: String ->
+            CookiesStore.save(context, cookiesText)
+        }
+
+        AsyncFunction("hasCookies") {
+            CookiesStore.path(context) != null
+        }
+
+        AsyncFunction("clearCookies") {
+            CookiesStore.clear(context)
+        }
+
         // Android 13+ only: without this the queue still runs, the notification just never
         // shows, which is exactly the "feels stuck" experience the app is meant to avoid.
         AsyncFunction("requestNotificationPermission") { promise: Promise ->

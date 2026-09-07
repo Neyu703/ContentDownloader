@@ -93,4 +93,24 @@ class PlaylistCapableBasePlatformTest {
 
         assertEquals("51-100", requestSlot.captured.getOption("--playlist-items"))
     }
+
+    @Test
+    fun `includes --cookies when a cookies path is given`() = runTest {
+        val requestSlot = slot<YoutubeDLRequest>()
+        every { engine.execute(capture(requestSlot), any(), any(), null) } returns response("")
+
+        soundcloud().fetchPlaylistInfo(cookiesPath = "/data/cookies.txt")
+
+        assertEquals("/data/cookies.txt", requestSlot.captured.getOption("--cookies"))
+    }
+
+    @Test
+    fun `omits --cookies when no cookies path is given`() = runTest {
+        val requestSlot = slot<YoutubeDLRequest>()
+        every { engine.execute(capture(requestSlot), any(), any(), null) } returns response("")
+
+        soundcloud().fetchPlaylistInfo()
+
+        assertNull(requestSlot.captured.getOption("--cookies"))
+    }
 }

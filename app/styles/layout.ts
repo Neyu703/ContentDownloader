@@ -109,6 +109,36 @@ export function makeLayoutStyles(colors: ThemeColors) {
       fontSize: 13,
       ...noSelect,
     },
+    // Full-width, bordered action rows used for the Settings screen's tappable entries
+    // (changelog, cookie import, downloads folder) — replaces plain underlined links there.
+    settingsActions: {
+      gap: 8,
+    },
+    settingsAction: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: colors.surfaceVariant,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS_MD,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    },
+    settingsActionPressed: {
+      backgroundColor: colors.accentSelected,
+      borderColor: colors.borderStrong,
+    },
+    settingsActionText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "500",
+      ...noSelect,
+    },
+    settingsActionChevron: {
+      color: colors.textMuted,
+      fontSize: 16,
+    },
     errorText: {
       color: colors.danger,
       textAlign: "center",

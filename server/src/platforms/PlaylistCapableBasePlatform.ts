@@ -1,4 +1,5 @@
 import { runYtDlp } from "../ytdlpProcess.js";
+import { cookiesArgs } from "../cookies.js";
 import { PLAYLIST_PAGE_SIZE } from "../environment.js";
 import { BasePlatform } from "./BasePlatform.js";
 import type { PlaylistCapablePlatform, PlaylistEntry, PlaylistInfo } from "./Platform.js";
@@ -26,6 +27,7 @@ export abstract class PlaylistCapableBasePlatform extends BasePlatform implement
       "--dump-json",
       "--no-warnings",
       "--no-plugin-dirs",
+      ...cookiesArgs(),
       "--playlist-items",
       `${start}-${start + count - 1}`,
       this.url,

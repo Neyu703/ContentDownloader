@@ -16,6 +16,9 @@ export function createNativeYtdlpMock() {
     pickDownloadsFolder: jest.fn().mockResolvedValue(null),
     getDownloadsFolderName: jest.fn().mockResolvedValue(null),
     resetDownloadsFolder: jest.fn().mockResolvedValue(undefined),
+    importCookies: jest.fn().mockResolvedValue(undefined),
+    hasCookies: jest.fn().mockResolvedValue(false),
+    clearCookies: jest.fn().mockResolvedValue(undefined),
     addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
     removeAllListeners: jest.fn(),
   };

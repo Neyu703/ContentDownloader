@@ -17,6 +17,7 @@ vi.mock("node:fs", () => ({
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import { COOKIES_FILE } from "../cookies.js";
 import * as environment from "../environment.js";
 import type { ProgressUpdate } from "../progress.js";
 import { TikTok } from "./TikTok.js";
@@ -168,6 +169,23 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
       expect.arrayContaining(["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "320K"])
     );
     expect(fs.createWriteStream).toHaveBeenCalled();
+  });
+
+  it("includes the --cookies flag in both info and download args when a cookies file is stored", async () => {
+    const infoChild = createFakeChild();
+    const downloadChild = createFakeChild();
+    mockNextSpawn(infoChild);
+    mockNextSpawn(downloadChild);
+
+    const promise = tiktok().download("audio", "320", vi.fn());
+    await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
+    downloadChild.emit("close", 0);
+    await promise;
+
+    const infoArgs = vi.mocked(spawn).mock.calls[0][1] as string[];
+    const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    expect(infoArgs).toEqual(expect.arrayContaining(["--cookies", COOKIES_FILE]));
+    expect(downloadArgs).toEqual(expect.arrayContaining(["--cookies", COOKIES_FILE]));
   });
 
   it("runs the video happy path with a height filter and the video converting message", async () => {

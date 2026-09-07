@@ -30,7 +30,7 @@ export interface JobState {
   etaSeconds: number | null;
   /** Native only — the raw last yt-dlp output line, genuinely untranslated diagnostic text. */
   lastLine: string;
-  /** Translatable status message (e.g. a retry notice), rendered via `t(lastLineKey, lastLineParams)`. */
+  /** Translatable status message (e.g. a retry notice), rendered via `translate(lastLineKey, lastLineParams)`. */
   lastLineKey?: string;
   lastLineParams?: Record<string, string | number>;
   /** Web: carried over from the preview fetched before submit. Native: resolved by the job itself once fetched. */
@@ -62,7 +62,7 @@ export interface DownloadRequest {
 
 export interface SetupState {
   phase: SetupPhase;
-  /** Translation key (native) or empty string (web, which has no setup phase). Render via `t(message, messageParams)`. */
+  /** Translation key (native) or empty string (web, which has no setup phase). Render via `translate(message, messageParams)`. */
   message: string;
   messageParams?: Record<string, string | number>;
 }
@@ -101,4 +101,10 @@ export interface Downloader {
    * Implemented on both platforms.
    */
   getPlaylistInfo(url: string, start: number): Promise<PlaylistInfo>;
+  /** Stores a Netscape-format cookies.txt, read by every subsequent yt-dlp invocation. Implemented on both platforms. */
+  importCookies(cookiesText: string): Promise<void>;
+  /** Whether cookies are currently stored, and when they were last imported (native never reports a date). Implemented on both platforms. */
+  getCookiesStatus(): Promise<{ present: boolean; updatedAt: string | null }>;
+  /** Removes the stored cookies file, if any. Implemented on both platforms. */
+  clearCookies(): Promise<void>;
 }

@@ -81,6 +81,12 @@ declare class NativeYtdlp extends NativeModule<YtdlpEvents> {
   getDownloadsFolderName(): Promise<string | null>;
   /** Resets saveToDownloads() back to the default public Downloads folder. */
   resetDownloadsFolder(): Promise<void>;
+  /** Stores a Netscape-format cookies.txt, read by every yt-dlp invocation once present. */
+  importCookies(cookiesText: string): Promise<void>;
+  /** Whether a cookies file is currently stored. */
+  hasCookies(): Promise<boolean>;
+  /** Removes the stored cookies file, if any. */
+  clearCookies(): Promise<void>;
 }
 
 export default requireNativeModule<NativeYtdlp>("Ytdlp");

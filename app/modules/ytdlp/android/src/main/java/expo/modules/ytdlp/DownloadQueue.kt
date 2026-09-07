@@ -173,7 +173,7 @@ object DownloadQueue {
         val platform = detectPlatform(url) ?: throw IllegalArgumentException("errors.invalidUrl")
         if (platform !is PlaylistCapablePlatform) throw IllegalArgumentException("errors.playlistNotSupported")
         prepare(context.applicationContext)
-        platform.fetchPlaylistInfo(start, count)
+        platform.fetchPlaylistInfo(start, count, CookiesStore.path(context.applicationContext))
     }
 
     fun cancel(id: String) {
@@ -229,9 +229,10 @@ object DownloadQueue {
             prepare(context)
             if (job.phase == JobPhase.CANCELLED) return
 
+            val cookiesPath = CookiesStore.path(context)
             job.startedAt = System.currentTimeMillis()
             advance(job, JobPhase.FETCHING_INFO)
-            val metadata = platform.fetchMetadata(job)
+            val metadata = platform.fetchMetadata(job, cookiesPath)
             job.title = metadata.title
             job.thumbnail = metadata.thumbnail
             DebugLog.add("job ${job.id}: resolved title=\"${metadata.title}\"")
@@ -242,7 +243,7 @@ object DownloadQueue {
             val outputDir = File(context.cacheDir, OUTPUT_DIR_NAME).apply { mkdirs() }
             advance(job, JobPhase.DOWNLOADING)
 
-            downloadWithRetry(platform, job, outputDir, ext)
+            downloadWithRetry(platform, job, outputDir, ext, cookiesPath)
             if (job.phase == JobPhase.CANCELLED) {
                 // cancel() already removed this job from the list; the finished file it just
                 // produced would otherwise never be cleaned up by clearFinished().
@@ -282,9 +283,9 @@ object DownloadQueue {
      * and records the resulting path on the job. Throws on failure — the caller (runJob) handles
      * cancellation/error routing.
      */
-    internal fun downloadAndFinalize(platform: Platform, job: DownloadJob, outputDir: File, ext: String) {
+    internal fun downloadAndFinalize(platform: Platform, job: DownloadJob, outputDir: File, ext: String, cookiesPath: String? = null) {
         val outputTemplate = File(outputDir, "${job.id}.%(ext)s").absolutePath
-        val options = platform.requestOptions(job, outputTemplate)
+        val options = platform.requestOptions(job, outputTemplate, cookiesPath)
         val request = buildRequestFrom(job.url, options)
         DebugLog.add("job ${job.id}: command: yt-dlp ${ShellCommandFormatter.quoteCommand(options, job.url)}")
         engine.execute(request, job.id, false) { progress, eta, line ->
@@ -307,7 +308,7 @@ object DownloadQueue {
      * HTTP 403 / PO-token issues) with a fixed delay in between. Mirrors download()'s retry loop in
      * server/src/platforms/BasePlatform.ts. Cancellation always propagates immediately, never retried.
      */
-    private suspend fun downloadWithRetry(platform: Platform, job: DownloadJob, outputDir: File, ext: String) {
+    private suspend fun downloadWithRetry(platform: Platform, job: DownloadJob, outputDir: File, ext: String, cookiesPath: String?) {
         var attempt = 1
         // A bounded `for (attempt in 1..MAX_ATTEMPTS)` here would leave one line of the compiler's
         // own "loop completed normally" fallthrough that this function's own logic can never
@@ -323,7 +324,7 @@ object DownloadQueue {
             }
             val attemptStartedAt = System.currentTimeMillis()
             try {
-                downloadAndFinalize(platform, job, outputDir, ext)
+                downloadAndFinalize(platform, job, outputDir, ext, cookiesPath)
                 return
             } catch (cancelled: YoutubeDL.CanceledException) {
                 throw cancelled

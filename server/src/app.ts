@@ -3,6 +3,7 @@ import cors from "cors";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { deleteCookies, getCookiesStatus, saveCookies } from "./cookies.js";
 import { AUDIO_QUALITIES, DOWNLOADS_DIR, VIDEO_QUALITIES } from "./environment.js";
 import { createJob, finishJob, getJob, updateJob } from "./jobStore.js";
 import { detectPlatform } from "./platforms/registry.js";
@@ -22,7 +23,9 @@ app.use(
     },
   })
 );
-app.use(express.json());
+// Every request body is a handful of short fields or a cookies.txt export (at most tens of KB) —
+// a generous but bounded limit blocks abuse without risking a legitimate request.
+app.use(express.json({ limit: "512kb" }));
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]/g, "").trim() || "audio";
@@ -121,6 +124,27 @@ app.post("/api/convert", (req, res) => {
         errorParams: params,
       });
     });
+});
+
+app.get("/api/cookies", (_req, res) => {
+  res.json(getCookiesStatus());
+});
+
+app.post("/api/cookies", (req, res) => {
+  const cookies = req.body?.cookies;
+  if (typeof cookies !== "string" || !cookies.trim()) {
+    res.status(400).json({ errorKey: "errors.cookiesEmpty" });
+    return;
+  }
+  saveCookies(cookies);
+  console.log(`Cookies importiert (${cookies.trim().split("\n").length} Zeilen)`);
+  res.json({ ok: true });
+});
+
+app.delete("/api/cookies", (_req, res) => {
+  deleteCookies();
+  console.log("Cookies entfernt");
+  res.json({ ok: true });
 });
 
 app.get("/api/job/:jobId", (req, res) => {

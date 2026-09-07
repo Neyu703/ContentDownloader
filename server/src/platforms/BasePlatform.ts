@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { errorMessage, isHttpOrHttps } from "../utils.js";
+import { cookiesArgs } from "../cookies.js";
 import { DownloadLogger } from "../downloadLog.js";
 import { DOWNLOADS_DIR, getYtDlpVersion, isFfmpegAvailable } from "../environment.js";
 import { runYtDlp } from "../ytdlpProcess.js";
@@ -35,7 +36,7 @@ export abstract class BasePlatform implements Platform {
 
   /** The exact yt-dlp argv used for a metadata-only lookup, shared by fetchInfo() and its download-log entry. */
   private infoArgs(): string[] {
-    return ["--dump-json", "--no-playlist", "--no-warnings", "--no-plugin-dirs", this.url];
+    return ["--dump-json", "--no-playlist", "--no-warnings", "--no-plugin-dirs", ...cookiesArgs(), this.url];
   }
 
   async fetchInfo(): Promise<VideoInfo> {
@@ -144,6 +145,7 @@ export abstract class BasePlatform implements Platform {
         ...this.buildFormatArgs(format, quality),
         "--no-playlist",
         "--no-warnings",
+        ...cookiesArgs(),
         "-o",
         outputTemplate,
         this.url,

@@ -31,17 +31,18 @@ abstract class BasePlatform(protected val url: String) : Platform {
      * under the process id of the job. Both fields come back on one line (yt-dlp's own template
      * syntax), so the same "last non-empty line wins over any leading noise" heuristic applies.
      */
-    override fun fetchMetadata(job: DownloadJob): JobMetadata {
+    override fun fetchMetadata(job: DownloadJob, cookiesPath: String?): JobMetadata {
         val request = YoutubeDLRequest(job.url)
             .addOption("--no-playlist")
             .addOption("--no-warnings")
             .addOption("--print", "%(title)s$METADATA_FIELD_SEPARATOR%(thumbnail)s")
+            .withCookies(cookiesPath)
         val output = DownloadQueue.engine.execute(request, job.id, false, null).out
         val line = nonEmptyTrimmedLines(output).lastOrNull() ?: return JobMetadata(job.url, null)
         val parts = line.split(METADATA_FIELD_SEPARATOR, limit = 2)
         val fastTitle = parts.getOrNull(0)?.takeIf(String::isNotBlank) ?: job.url
         val thumbnail = parts.getOrNull(1)?.takeIf { it.isNotBlank() && it != "NA" }
-        val title = if (isLowQualityTitle(fastTitle)) resolveBetterTitle(job, fastTitle) else fastTitle
+        val title = if (isLowQualityTitle(fastTitle)) resolveBetterTitle(job, fastTitle, cookiesPath) else fastTitle
         return JobMetadata(title, thumbnail)
     }
 
@@ -52,11 +53,12 @@ abstract class BasePlatform(protected val url: String) : Platform {
      * server/src/platforms/BasePlatform.ts, but only for this minority case, keeping the common-case
      * metadata lookup as cheap as before.
      */
-    private fun resolveBetterTitle(job: DownloadJob, fallbackTitle: String): String {
+    private fun resolveBetterTitle(job: DownloadJob, fallbackTitle: String, cookiesPath: String?): String {
         val request = YoutubeDLRequest(job.url)
             .addOption("--dump-json")
             .addOption("--no-playlist")
             .addOption("--no-warnings")
+            .withCookies(cookiesPath)
         val output = DownloadQueue.engine.execute(request, job.id, false, null).out
         val json = nonEmptyTrimmedLines(output).lastOrNull()?.toJsonObjectOrNull()
             ?: return fallbackTitle
@@ -71,10 +73,10 @@ abstract class BasePlatform(protected val url: String) : Platform {
         )
     }
 
-    override fun buildRequest(job: DownloadJob, outputTemplate: String): YoutubeDLRequest =
-        buildRequestFrom(job.url, requestOptions(job, outputTemplate))
+    override fun buildRequest(job: DownloadJob, outputTemplate: String, cookiesPath: String?): YoutubeDLRequest =
+        buildRequestFrom(job.url, requestOptions(job, outputTemplate, cookiesPath))
 
-    override fun requestOptions(job: DownloadJob, outputTemplate: String): List<Pair<String, String?>> {
+    override fun requestOptions(job: DownloadJob, outputTemplate: String, cookiesPath: String?): List<Pair<String, String?>> {
         val options = mutableListOf<Pair<String, String?>>()
         if (job.format == "audio") {
             options += "-f" to "bestaudio/best"
@@ -88,6 +90,7 @@ abstract class BasePlatform(protected val url: String) : Platform {
         }
         options += "--no-playlist" to null
         options += "--no-warnings" to null
+        if (cookiesPath != null) options += "--cookies" to cookiesPath
         options += "-o" to outputTemplate
         return options
     }

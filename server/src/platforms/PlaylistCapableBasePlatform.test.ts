@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
+import * as cookies from "../cookies.js";
 import { SoundCloud } from "./SoundCloud.js";
 
 /**
@@ -111,6 +112,18 @@ describe("fetchPlaylistInfo", () => {
     await resolveSpawn(child, JSON.stringify({ title: "No id" }));
     const info = await promise;
     expect(info.entries[0].thumbnail).toBeNull();
+  });
+
+  it("includes the --cookies flag when a cookies file is stored", async () => {
+    const cookiesArgsSpy = vi.spyOn(cookies, "cookiesArgs").mockReturnValue(["--cookies", "/data/cookies.txt"]);
+    const child = createFakeChild();
+    mockNextSpawn(child);
+    const promise = soundcloud().fetchPlaylistInfo();
+    await resolveSpawn(child, "");
+    await promise;
+    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
+    expect(args).toEqual(expect.arrayContaining(["--cookies", "/data/cookies.txt"]));
+    cookiesArgsSpy.mockRestore();
   });
 
   it("sends the requested 1-indexed --playlist-items range, defaulting to the page size", async () => {

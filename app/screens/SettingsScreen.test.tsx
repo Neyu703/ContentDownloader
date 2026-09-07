@@ -17,6 +17,9 @@ let mockDownloader: {
   getDownloadsFolderName?: jest.Mock;
   pickDownloadsFolder?: jest.Mock;
   resetDownloadsFolder?: jest.Mock;
+  getCookiesStatus?: jest.Mock;
+  importCookies?: jest.Mock;
+  clearCookies?: jest.Mock;
 };
 jest.mock("../downloader", () => ({
   get downloader() {
@@ -203,5 +206,19 @@ describe("SettingsScreen", () => {
     expect(screen.getByText("Änderungsprotokoll")).toBeTruthy();
     await fireEvent.press(screen.getByText("Schließen"));
     expect(screen.queryByText("Änderungsprotokoll")).toBeNull();
+  });
+
+  it("opens and closes the cookie import modal", async () => {
+    mockDownloader = { getCookiesStatus: jest.fn().mockResolvedValue({ present: false, updatedAt: null }) };
+    await renderSettings();
+    expect(screen.queryByText("Keine Cookies hinterlegt")).toBeNull();
+
+    await fireEvent.press(screen.getByText("YouTube-Cookies importieren"));
+
+    await waitFor(() => expect(screen.getByText("Keine Cookies hinterlegt")).toBeTruthy());
+
+    await fireEvent.press(screen.getByText("Schließen"));
+
+    expect(screen.queryByText("Keine Cookies hinterlegt")).toBeNull();
   });
 });

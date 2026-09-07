@@ -10,6 +10,7 @@
     "expo-build-properties": "~57.0.12",
     "expo-clipboard": "57.0.1",
     "expo-constants": "~57.0.12",
+    "expo-document-picker": "57.0.1",
     "expo-localization": "~57.0.1",
     "expo-mail-composer": "57.0.1",
     "expo-sharing": "~57.0.13",

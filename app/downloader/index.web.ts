@@ -217,6 +217,22 @@ export const downloader: Downloader = {
     return fetchJson<PlaylistInfo>(`/api/playlist-info?url=${encodeURIComponent(url)}&start=${start}`);
   },
 
+  async importCookies(cookiesText: string) {
+    await fetchJson("/api/cookies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cookies: cookiesText }),
+    });
+  },
+
+  async getCookiesStatus() {
+    return fetchJson<{ present: boolean; updatedAt: string | null }>("/api/cookies");
+  },
+
+  async clearCookies() {
+    await fetchJson("/api/cookies", { method: "DELETE" });
+  },
+
   updateJobPreview(id, info: PreviewPatch) {
     // Only fills in fields still missing — never overwrites the confirmed title the server sends
     // once the job actually finishes.
