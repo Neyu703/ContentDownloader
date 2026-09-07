@@ -4,7 +4,7 @@ import { JobCard } from "./JobCard";
 import type { JobState } from "../downloader/types";
 import { initI18n } from "../i18n";
 
-// JobCard renders every label via useTranslation()'s t(), which otherwise returns the raw key.
+// JobCard renders every label via useTranslation()'s translate(), which otherwise returns the raw key.
 initI18n("de");
 
 // JobCard renders through useStyles() -> useTheme() -> ThemeContext, which imports AsyncStorage

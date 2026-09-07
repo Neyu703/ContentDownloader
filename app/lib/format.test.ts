@@ -13,7 +13,7 @@ import {
 } from "./format";
 import type { PlaylistInfo } from "../downloader/types";
 
-const t = initI18n("de").getFixedT("de");
+const translate = initI18n("de").getFixedT("de");
 
 describe("formatMB", () => {
   it("shows MB below 1024", () => {
@@ -89,23 +89,23 @@ describe("isFinishedPhase", () => {
 
 describe("playlistConfirmLabel", () => {
   it("says nothing is selected at count 0", () => {
-    expect(playlistConfirmLabel(t, "audio", 0)).toBe("Nichts ausgewählt");
+    expect(playlistConfirmLabel(translate, "audio", 0)).toBe("Nichts ausgewählt");
   });
 
   it("uses the singular audio noun at count 1", () => {
-    expect(playlistConfirmLabel(t, "audio", 1)).toBe("1 Audio herunterladen");
+    expect(playlistConfirmLabel(translate, "audio", 1)).toBe("1 Audio herunterladen");
   });
 
   it("uses the plural audio noun above 1", () => {
-    expect(playlistConfirmLabel(t, "audio", 3)).toBe("3 Audios herunterladen");
+    expect(playlistConfirmLabel(translate, "audio", 3)).toBe("3 Audios herunterladen");
   });
 
   it("uses the singular video noun at count 1", () => {
-    expect(playlistConfirmLabel(t, "video", 1)).toBe("1 Video herunterladen");
+    expect(playlistConfirmLabel(translate, "video", 1)).toBe("1 Video herunterladen");
   });
 
   it("uses the plural video noun above 1", () => {
-    expect(playlistConfirmLabel(t, "video", 2)).toBe("2 Videos herunterladen");
+    expect(playlistConfirmLabel(translate, "video", 2)).toBe("2 Videos herunterladen");
   });
 });
 

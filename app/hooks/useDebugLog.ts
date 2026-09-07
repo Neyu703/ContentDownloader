@@ -6,7 +6,7 @@ import { downloader } from "../downloader";
 
 /** Prepares the native debug-log file and hands it to the device's mail composer. */
 export function useDebugLog(onError: (message: string) => void) {
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   const [isSendingLog, setIsSendingLog] = useState(false);
 
   async function sendLog() {
@@ -18,18 +18,18 @@ export function useDebugLog(onError: (message: string) => void) {
     try {
       const fileUri = await downloader.getDebugLogFileUri();
       if (!(await MailComposer.isAvailableAsync())) {
-        onError(t("home.noMailAppConfigured"));
+        onError(translate("home.noMailAppConfigured"));
         return;
       }
       const recipient = Constants.expoConfig?.extra?.debugLogEmail as string | undefined;
       await MailComposer.composeAsync({
         recipients: recipient ? [recipient] : undefined,
-        subject: t("home.debugLogSubject"),
-        body: t("home.debugLogBody"),
+        subject: translate("home.debugLogSubject"),
+        body: translate("home.debugLogBody"),
         attachments: [fileUri],
       });
     } catch {
-      onError(t("home.logPrepareFailed"));
+      onError(translate("home.logPrepareFailed"));
     } finally {
       setIsSendingLog(false);
     }

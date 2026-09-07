@@ -31,7 +31,7 @@ export function PlaylistPickerModal({
   onCancel: () => void;
 }) {
   const styles = useStyles();
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   // `picker` (not just a boolean) also narrows the type below — needed regardless of OverlayModal's
   // own visible/unmount handling.
   if (!picker) return null;
@@ -46,7 +46,7 @@ export function PlaylistPickerModal({
           {picker.info.totalCount != null ? ` (${picker.info.totalCount})` : ""}
         </Text>
         <Pressable style={styles.linkButton} onPress={onToggleAll}>
-          <Text style={styles.linkText}>{allSelected ? t("playlist.deselectAll") : t("playlist.selectAll")}</Text>
+          <Text style={styles.linkText}>{allSelected ? translate("playlist.deselectAll") : translate("playlist.selectAll")}</Text>
         </Pressable>
         {/* FlatList virtualizes rows (only mounts what's on screen) so playlists with thousands of
             entries stay smooth, and onEndReached drives infinite-scroll paging. */}
@@ -68,19 +68,19 @@ export function PlaylistPickerModal({
           onEndReachedThreshold={0.5}
           onEndReached={onLoadMore}
           ListFooterComponent={
-            picker.isLoadingMore ? <Text style={styles.searchMessage}>{t("playlist.loadingMore")}</Text> : null
+            picker.isLoadingMore ? <Text style={styles.searchMessage}>{translate("playlist.loadingMore")}</Text> : null
           }
         />
         <View style={styles.jobActions}>
           <Pressable style={styles.secondaryButton} onPress={onCancel}>
-            <Text style={styles.buttonText}>{t("playlist.cancel")}</Text>
+            <Text style={styles.buttonText}>{translate("playlist.cancel")}</Text>
           </Pressable>
           <Pressable
             style={[styles.button, picker.selected.size === 0 && styles.buttonDisabled]}
             onPress={onConfirm}
             disabled={picker.selected.size === 0}
           >
-            <Text style={styles.buttonText}>{playlistConfirmLabel(t, format, picker.selected.size)}</Text>
+            <Text style={styles.buttonText}>{playlistConfirmLabel(translate, format, picker.selected.size)}</Text>
           </Pressable>
         </View>
       </View>

@@ -70,9 +70,9 @@ export function toFileUri(path: string): string {
 }
 
 /** Label for the playlist picker's confirm button — adapts to format, count, and singular/plural. */
-export function playlistConfirmLabel(t: TFunction, format: MediaFormat, count: number): string {
-  if (count === 0) return t("playlist.confirmNone");
-  return t(format === "audio" ? "playlist.confirmAudio" : "playlist.confirmVideo", { count });
+export function playlistConfirmLabel(translate: TFunction, format: MediaFormat, count: number): string {
+  if (count === 0) return translate("playlist.confirmNone");
+  return translate(format === "audio" ? "playlist.confirmAudio" : "playlist.confirmVideo", { count });
 }
 
 /** Opaque client-side grouping key — never sent anywhere, just used to cluster job cards in the UI. */

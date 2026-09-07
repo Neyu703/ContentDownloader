@@ -9,7 +9,7 @@ import { HomeScreen } from "./HomeScreen";
 import { initI18n } from "../i18n";
 import type { JobState, PlaylistInfo, SetupState } from "../downloader/types";
 
-// HomeScreen renders every label via useTranslation()'s t(), which otherwise returns the raw key.
+// HomeScreen renders every label via useTranslation()'s translate(), which otherwise returns the raw key.
 initI18n("de");
 
 jest.mock("expo-clipboard", () => ({ getStringAsync: jest.fn() }));

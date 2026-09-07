@@ -33,9 +33,9 @@ export function usePlaylistPicker(params: {
   submit: SubmitFn;
   setSubmitError: (message: string | null) => void;
   onUrlConsumed: () => void;
-  t: TFunction;
+  translate: TFunction;
 }) {
-  const { format, quality, submit, setSubmitError, onUrlConsumed, t } = params;
+  const { format, quality, submit, setSubmitError, onUrlConsumed, translate } = params;
   const [playlistPicker, setPlaylistPicker] = useState<PlaylistPickerState | null>(null);
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   // Guards loadMorePlaylistEntries() re-entry synchronously — the isLoadingMore *state* flag can't,
@@ -55,7 +55,7 @@ export function usePlaylistPicker(params: {
         noMorePages: info.entries.length === 0,
       });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : t("errors.playlistInfoFailed"));
+      setSubmitError(err instanceof Error ? err.message : translate("errors.playlistInfoFailed"));
     } finally {
       setIsPlaylistLoading(false);
     }

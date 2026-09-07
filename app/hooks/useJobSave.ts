@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 /** Drives a finished job's save button: save state plus the "already saved — overwrite?" guard. */
 export function useJobSave(onSave: ((filenameOverride?: string) => Promise<void>) | undefined, customName: string | null) {
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // Only ever called while the save button is mounted, which itself requires `onSave` — see the
@@ -28,9 +28,9 @@ export function useJobSave(onSave: ((filenameOverride?: string) => Promise<void>
     if (saveState === "saved") {
       // Prevents the case that prompted this: tapping "speichern" twice creates two files in
       // Downloads (MediaStore auto-dedupes the name instead of overwriting).
-      Alert.alert(t("jobCard.alreadySavedTitle"), t("jobCard.alreadySavedBody"), [
-        { text: t("jobCard.alreadySavedCancel"), style: "cancel" },
-        { text: t("jobCard.alreadySavedConfirm"), onPress: doSave },
+      Alert.alert(translate("jobCard.alreadySavedTitle"), translate("jobCard.alreadySavedBody"), [
+        { text: translate("jobCard.alreadySavedCancel"), style: "cancel" },
+        { text: translate("jobCard.alreadySavedConfirm"), onPress: doSave },
       ]);
       return;
     }

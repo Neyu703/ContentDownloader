@@ -41,7 +41,7 @@ export function JobCard({
   onSave?: (filenameOverride?: string) => Promise<void>;
 }) {
   const styles = useStyles();
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   // User-edited filename for a finished job, overriding the auto-picked title — null until touched.
   const [customName, setCustomName] = useState<string | null>(null);
   const { saveState, handleSavePress } = useJobSave(onSave, customName);
@@ -59,8 +59,8 @@ export function JobCard({
       : null;
   const etaLabel = job.etaSeconds != null && job.etaSeconds > 0 ? formatSecondsShort(job.etaSeconds) : null;
   const extLabel = (job.ext ?? "").toUpperCase();
-  const errorText = t(job.errorKey ?? "errors.unknown", job.errorParams);
-  const statusText = job.lastLineKey ? t(job.lastLineKey, job.lastLineParams) : job.lastLine;
+  const errorText = translate(job.errorKey ?? "errors.unknown", job.errorParams);
+  const statusText = job.lastLineKey ? translate(job.lastLineKey, job.lastLineParams) : job.lastLine;
   // "Läuft seit" alone isn't informative enough to justify showing the details toggle — only count
   // it once there's at least one real data point (progress, size, speed, ETA, or a raw yt-dlp line).
   const hasDebugInfo =
@@ -72,8 +72,8 @@ export function JobCard({
     statusText !== "";
   const statusLabel = (
     <Text style={styles.statusText}>
-      {t(`phase.${job.phase}`)}
-      {isStalled ? t("jobCard.stalledSuffix") : ""}
+      {translate(`phase.${job.phase}`)}
+      {isStalled ? translate("jobCard.stalledSuffix") : ""}
     </Text>
   );
 
@@ -96,7 +96,7 @@ export function JobCard({
               style={[styles.jobTitle, styles.jobTitleInputExtra]}
               value={customName ?? job.title ?? job.url}
               onChangeText={setCustomName}
-              accessibilityLabel={t("jobCard.renameAccessibilityLabel")}
+              accessibilityLabel={translate("jobCard.renameAccessibilityLabel")}
             />
           ) : (
             <Text style={styles.jobTitle} numberOfLines={1}>
@@ -112,14 +112,14 @@ export function JobCard({
       {job.phase === "error" ? (
         <Text style={styles.errorText}>{errorText}</Text>
       ) : job.phase === "done" || job.phase === "cancelled" ? (
-        <Text style={styles.statusText}>{t(`phase.${job.phase}`)}</Text>
+        <Text style={styles.statusText}>{translate(`phase.${job.phase}`)}</Text>
       ) : (
         <>
           {hasDebugInfo ? (
             <Pressable
               style={styles.statusRow}
               onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
-              accessibilityLabel={isDetailsExpanded ? t("jobCard.detailsCollapse") : t("jobCard.detailsExpand")}
+              accessibilityLabel={isDetailsExpanded ? translate("jobCard.detailsCollapse") : translate("jobCard.detailsExpand")}
             >
               {statusLabel}
               <View style={styles.collapseButton}>
@@ -170,24 +170,24 @@ export function JobCard({
                 style={styles.debugBox}
               >
                 {job.progress != null && (
-                  <Text style={styles.debugLine}>{t("jobCard.progressLabel", { percent: job.progress.toFixed(1) })}</Text>
+                  <Text style={styles.debugLine}>{translate("jobCard.progressLabel", { percent: job.progress.toFixed(1) })}</Text>
                 )}
                 {job.totalMB != null && (
                   <Text style={styles.debugLine}>
-                    {t("jobCard.downloadedLabel", {
-                      downloaded: job.downloadedMB != null ? formatMB(job.downloadedMB) : t("jobCard.downloadedUnknown"),
+                    {translate("jobCard.downloadedLabel", {
+                      downloaded: job.downloadedMB != null ? formatMB(job.downloadedMB) : translate("jobCard.downloadedUnknown"),
                       total: formatMB(job.totalMB),
                     })}
                   </Text>
                 )}
                 {estimatedFinalMB != null && (
-                  <Text style={styles.debugLine}>{t("jobCard.estimatedSizeLabel", { size: formatMB(estimatedFinalMB) })}</Text>
+                  <Text style={styles.debugLine}>{translate("jobCard.estimatedSizeLabel", { size: formatMB(estimatedFinalMB) })}</Text>
                 )}
                 {job.speedMBs != null && (
-                  <Text style={styles.debugLine}>{t("jobCard.speedLabel", { speed: job.speedMBs.toFixed(2) })}</Text>
+                  <Text style={styles.debugLine}>{translate("jobCard.speedLabel", { speed: job.speedMBs.toFixed(2) })}</Text>
                 )}
-                {etaLabel && <Text style={styles.debugLine}>{t("jobCard.etaLabel", { eta: etaLabel })}</Text>}
-                <Text style={styles.debugLine}>{t("jobCard.runningSinceLabel", { elapsed: formatElapsed(now - job.createdAt) })}</Text>
+                {etaLabel && <Text style={styles.debugLine}>{translate("jobCard.etaLabel", { eta: etaLabel })}</Text>}
+                <Text style={styles.debugLine}>{translate("jobCard.runningSinceLabel", { elapsed: formatElapsed(now - job.createdAt) })}</Text>
                 {statusText !== "" && (
                   <Text style={styles.debugLine} numberOfLines={1}>
                     {statusText}
@@ -202,12 +202,12 @@ export function JobCard({
       <View style={styles.jobActions}>
         {!isFinished && (
           <Pressable style={styles.secondaryButton} onPress={onCancel}>
-            <Text style={styles.buttonText}>{t("jobCard.cancel")}</Text>
+            <Text style={styles.buttonText}>{translate("jobCard.cancel")}</Text>
           </Pressable>
         )}
         {job.phase === "error" && (
           <Pressable style={styles.secondaryButton} onPress={onRetry}>
-            <Text style={styles.buttonText}>{t("jobCard.tryAgain")}</Text>
+            <Text style={styles.buttonText}>{translate("jobCard.tryAgain")}</Text>
           </Pressable>
         )}
         {job.phase === "done" && onSave && (
@@ -219,10 +219,10 @@ export function JobCard({
             >
               <Text style={styles.downloadButtonText}>
                 {saveState === "saving"
-                  ? t("jobCard.saving")
+                  ? translate("jobCard.saving")
                   : saveState === "saved"
-                    ? t("jobCard.savedCheck")
-                    : t("jobCard.save", { ext: extLabel })}
+                    ? translate("jobCard.savedCheck")
+                    : translate("jobCard.save", { ext: extLabel })}
               </Text>
             </Pressable>
             <Pressable
@@ -230,7 +230,7 @@ export function JobCard({
               onPress={() => onShare(customName ?? undefined)}
               disabled={isSharing}
             >
-              <Text style={styles.buttonText}>{isSharing ? t("jobCard.sharingEllipsis") : t("jobCard.share")}</Text>
+              <Text style={styles.buttonText}>{isSharing ? translate("jobCard.sharingEllipsis") : translate("jobCard.share")}</Text>
             </Pressable>
           </>
         )}
@@ -241,12 +241,12 @@ export function JobCard({
             disabled={isSharing}
           >
             <Text style={styles.downloadButtonText}>
-              {isSharing ? t("jobCard.downloadingEllipsis") : t("jobCard.downloadExt", { ext: extLabel })}
+              {isSharing ? translate("jobCard.downloadingEllipsis") : translate("jobCard.downloadExt", { ext: extLabel })}
             </Text>
           </Pressable>
         )}
       </View>
-      {saveState === "error" && <Text style={styles.errorText}>{t("jobCard.saveFailed")}</Text>}
+      {saveState === "error" && <Text style={styles.errorText}>{translate("jobCard.saveFailed")}</Text>}
     </View>
   );
 }

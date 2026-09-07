@@ -6,13 +6,13 @@ import { OverlayModal } from "./OverlayModal";
 
 export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const styles = useStyles();
-  const { t, i18n } = useTranslation();
+  const { t: translate, i18n } = useTranslation();
   const language = i18n.language === "de" ? "de" : "en";
 
   return (
     <OverlayModal visible={visible} onClose={onClose}>
       <Pressable style={styles.changelogModal} onPress={() => {}}>
-        <Text style={styles.changelogTitle}>{t("changelog.title")}</Text>
+        <Text style={styles.changelogTitle}>{translate("changelog.title")}</Text>
         <FlatList
           testID="changelog-entry-list"
           style={styles.changelogList}
@@ -32,7 +32,7 @@ export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose
           )}
         />
         <Pressable style={styles.button} onPress={onClose}>
-          <Text style={styles.buttonText}>{t("changelog.close")}</Text>
+          <Text style={styles.buttonText}>{translate("changelog.close")}</Text>
         </Pressable>
       </Pressable>
     </OverlayModal>

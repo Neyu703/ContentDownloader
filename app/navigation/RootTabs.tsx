@@ -16,7 +16,7 @@ function TabBarIcon({ symbol, color, size }: { symbol: string; color: string; si
 
 /** The app's two-tab bottom navigator: the existing download screen, and the new Settings screen. */
 export function RootTabs() {
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   const { colors } = useTheme();
   const navigationStyles = makeNavigationStyles(colors);
 
@@ -33,7 +33,7 @@ export function RootTabs() {
         name="Home"
         component={HomeScreen}
         options={{
-          title: t("navigation.home"),
+          title: translate("navigation.home"),
           tabBarIcon: ({ color, size }) => <TabBarIcon symbol="🏠" color={color} size={size} />,
         }}
       />
@@ -41,7 +41,7 @@ export function RootTabs() {
         name="Settings"
         component={SettingsScreen}
         options={{
-          title: t("navigation.settings"),
+          title: translate("navigation.settings"),
           tabBarIcon: ({ color, size }) => <TabBarIcon symbol="⚙️" color={color} size={size} />,
         }}
       />

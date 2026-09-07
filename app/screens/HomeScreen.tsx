@@ -84,7 +84,7 @@ function useNow(active: boolean): number {
 export function HomeScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
-  const { t } = useTranslation();
+  const { t: translate } = useTranslation();
   const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("audio");
   const [quality, setQuality] = useState(DEFAULT_QUALITY.audio);
@@ -100,27 +100,27 @@ export function HomeScreen() {
   // these option lists only rebuild when the language actually changes.
   const formatOptions: { value: MediaFormat; label: string }[] = useMemo(
     () => [
-      { value: "audio", label: t("home.formatAudio") },
-      { value: "video", label: t("home.formatVideo") },
+      { value: "audio", label: translate("home.formatAudio") },
+      { value: "video", label: translate("home.formatVideo") },
     ],
-    [t]
+    [translate]
   );
   const qualityOptions: Record<MediaFormat, QualityOption[]> = useMemo(
     () => ({
       audio: [
-        { value: "128", label: t("home.audioQuality128") },
-        { value: "192", label: t("home.audioQuality192") },
-        { value: "320", label: t("home.audioQuality320") },
+        { value: "128", label: translate("home.audioQuality128") },
+        { value: "192", label: translate("home.audioQuality192") },
+        { value: "320", label: translate("home.audioQuality320") },
       ],
       video: [
-        { value: "360", label: t("home.videoQuality360") },
-        { value: "480", label: t("home.videoQuality480") },
-        { value: "720", label: t("home.videoQuality720") },
-        { value: "1080", label: t("home.videoQuality1080") },
-        { value: "best", label: t("home.videoQualityBest") },
+        { value: "360", label: translate("home.videoQuality360") },
+        { value: "480", label: translate("home.videoQuality480") },
+        { value: "720", label: translate("home.videoQuality720") },
+        { value: "1080", label: translate("home.videoQuality1080") },
+        { value: "best", label: translate("home.videoQualityBest") },
       ],
     }),
-    [t]
+    [translate]
   );
 
   const {
@@ -138,7 +138,7 @@ export function HomeScreen() {
     submit,
     setSubmitError,
     onUrlConsumed: () => setUrl(""),
-    t,
+    translate,
   });
 
   const hasActiveJob = jobs.some((j) => !isFinishedPhase(j.phase));
@@ -202,7 +202,7 @@ export function HomeScreen() {
         groupTitle: info?.groupTitle,
       });
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : t("home.downloadFailed"));
+      setSubmitError(err instanceof Error ? err.message : translate("home.downloadFailed"));
       return null;
     } finally {
       setIsSubmitting(false);
@@ -248,7 +248,7 @@ export function HomeScreen() {
     const videoLines = lines.filter((line) => !PLAYLIST_URL_PATTERN.test(line));
 
     if (videoLines.length === 0) {
-      setSubmitError(t("home.noValidLinksFound"));
+      setSubmitError(translate("home.noValidLinksFound"));
       return;
     }
 
@@ -264,7 +264,7 @@ export function HomeScreen() {
     // beforehand would just get wiped out by the first job. Skipped if a real submit failure
     // already left its own message — that's the more important thing to surface.
     if (playlistLines.length > 0 && !hadSubmitError) {
-      setSubmitError(t("home.playlistLinksSkipped", { count: playlistLines.length }));
+      setSubmitError(translate("home.playlistLinksSkipped", { count: playlistLines.length }));
     }
   }
 
@@ -297,7 +297,7 @@ export function HomeScreen() {
       <View style={styles.urlRow}>
         <TextInput
           style={styles.urlInput}
-          placeholder={t("home.urlPlaceholder")}
+          placeholder={translate("home.urlPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={url}
           onChangeText={setUrl}
@@ -305,13 +305,13 @@ export function HomeScreen() {
           autoCorrect={false}
           multiline
         />
-        <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel={t("home.pasteAccessibilityLabel")}>
+        <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel={translate("home.pasteAccessibilityLabel")}>
           <Text style={styles.pasteButtonIcon}>📋</Text>
         </Pressable>
       </View>
 
-      {isPlaylistLoading && <Text style={styles.searchMessage}>{t("home.loadingPlaylist")}</Text>}
-      {isPreviewLoading && !preview && <Text style={styles.searchMessage}>{t("home.searchingVideo")}</Text>}
+      {isPlaylistLoading && <Text style={styles.searchMessage}>{translate("home.loadingPlaylist")}</Text>}
+      {isPreviewLoading && !preview && <Text style={styles.searchMessage}>{translate("home.searchingVideo")}</Text>}
       {preview && (
         <View style={styles.previewCard}>
           {preview.info.thumbnail && (
@@ -330,11 +330,11 @@ export function HomeScreen() {
 
       <View style={styles.optionsRow}>
         <View style={styles.optionsCol}>
-          <Text style={styles.label}>{t("home.formatLabel")}</Text>
+          <Text style={styles.label}>{translate("home.formatLabel")}</Text>
           <Dropdown options={formatOptions} value={format} onChange={handleFormatChange} />
         </View>
         <View style={styles.optionsCol}>
-          <Text style={styles.label}>{t("home.qualityLabel")}</Text>
+          <Text style={styles.label}>{translate("home.qualityLabel")}</Text>
           <Dropdown options={qualityOptions[format]} value={quality} onChange={handleQualityChange} />
         </View>
       </View>
@@ -346,10 +346,10 @@ export function HomeScreen() {
       >
         <Text style={styles.buttonText}>
           {isPlaylistLoading
-            ? t("home.downloadButtonPlaylistLoading")
+            ? translate("home.downloadButtonPlaylistLoading")
             : isSubmitting
-              ? t("home.downloadButtonSubmitting")
-              : t("home.downloadButton")}
+              ? translate("home.downloadButtonSubmitting")
+              : translate("home.downloadButton")}
         </Text>
       </Pressable>
       {submitError && <Text style={styles.errorText}>{submitError}</Text>}
@@ -366,8 +366,8 @@ export function HomeScreen() {
       const stats = groupStats.get(job.groupId)!;
       renderedJobs.push(
         <Text key={`group-${job.groupId}`} style={styles.groupHeader}>
-          {t("home.groupProgress", {
-            title: job.groupTitle ?? t("home.defaultPlaylistTitle"),
+          {translate("home.groupProgress", {
+            title: job.groupTitle ?? translate("home.defaultPlaylistTitle"),
             done: stats.done,
             total: stats.total,
           })}
@@ -402,7 +402,7 @@ export function HomeScreen() {
           style={[styles.linkButton, useTwoColumnLayout && styles.flushTop]}
           onPress={() => downloader.clearFinished()}
         >
-          <Text style={styles.linkText}>{t("home.clearFinished")}</Text>
+          <Text style={styles.linkText}>{translate("home.clearFinished")}</Text>
         </Pressable>
       )}
       <ScrollView
@@ -416,18 +416,18 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.page}>
       <View style={[styles.card, useTwoColumnLayout && styles.cardWide]}>
-        <Text style={styles.title}>{t("home.title")}</Text>
-        <Text style={styles.subtitle}>{t("home.subtitle")}</Text>
+        <Text style={styles.title}>{translate("home.title")}</Text>
+        <Text style={styles.subtitle}>{translate("home.subtitle")}</Text>
 
         {isSetupMessagePhase(setup.phase) && (
           <Text style={[styles.searchMessage, setup.phase === "failed" && styles.errorText]}>
-            {t(setup.message, setup.messageParams)}
+            {translate(setup.message, setup.messageParams)}
           </Text>
         )}
 
         {downloader.getDebugLogFileUri && (
           <Pressable style={styles.linkButton} onPress={sendLog} disabled={isSendingLog}>
-            <Text style={styles.linkText}>{isSendingLog ? t("home.debugLogPreparing") : t("home.debugLogSend")}</Text>
+            <Text style={styles.linkText}>{isSendingLog ? translate("home.debugLogPreparing") : translate("home.debugLogSend")}</Text>
           </Pressable>
         )}
 

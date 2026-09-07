@@ -3,7 +3,7 @@ import { PlaylistPickerModal, type PlaylistPickerViewState } from "./PlaylistPic
 import type { PlaylistEntry } from "../downloader/types";
 import { initI18n } from "../i18n";
 
-// PlaylistPickerModal renders every label via useTranslation()'s t(), which otherwise returns the raw key.
+// PlaylistPickerModal renders every label via useTranslation()'s translate(), which otherwise returns the raw key.
 initI18n("de");
 
 // PlaylistPickerModal renders through useStyles() -> useTheme() -> ThemeContext, which imports
