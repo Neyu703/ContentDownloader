@@ -45,12 +45,16 @@ export class DownloadLogger {
 
   /** Starts a new "=== TITLE ===" block. */
   section(title: string): void {
-    this.append(`\n=== ${title} ===\n`);
+    const text = `\n=== ${title} ===\n`;
+    this.append(text);
+    console.log(text.trim());
   }
 
   /** Appends one timestamped line to the current section. */
   line(message: string): void {
-    this.append(`[${new Date().toISOString()}] ${message}\n`);
+    const text = `[${new Date().toISOString()}] ${message}\n`;
+    this.append(text);
+    console.log(text.trim());
   }
 
   /** Logs a yt-dlp invocation as a single, copy-pasteable shell command. */

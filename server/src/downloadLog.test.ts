@@ -48,17 +48,23 @@ describe("DownloadLogger", () => {
     expect(fs.unlinkSync).toHaveBeenCalledTimes(2);
   });
 
-  it("appends a timestamped section header", () => {
+  it("appends a timestamped section header and echoes it to the console", () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const logger = new DownloadLogger("job-1");
     logger.section("FETCH INFO");
     expect(writeMock).toHaveBeenCalledWith("\n=== FETCH INFO ===\n");
+    expect(consoleSpy).toHaveBeenCalledWith("=== FETCH INFO ===");
+    consoleSpy.mockRestore();
   });
 
-  it("appends a timestamped line", () => {
+  it("appends a timestamped line and echoes it to the console", () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const logger = new DownloadLogger("job-1");
     logger.line("hello");
     const [content] = writeMock.mock.calls.at(-1)!;
     expect(content).toMatch(/^\[.+\] hello\n$/);
+    expect(consoleSpy).toHaveBeenCalledWith(content.trim());
+    consoleSpy.mockRestore();
   });
 
   it("logs a command with args quoted only when they need it", () => {
