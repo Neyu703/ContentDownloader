@@ -9,6 +9,26 @@ export interface ChangelogEntry {
 /** Bundled release notes shown in the changelog modal — newest first. Append one entry per release. */
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.10.0",
+    date: "2026-09-05",
+    notes: {
+      de: [
+        "Unterstützung für weitere Plattformen neben YouTube: TikTok, Instagram, Twitter/X, SoundCloud, Vimeo und Twitch.",
+        "Neuer Einstellungen-Bereich: das zuletzt genutzte Format/Qualität wird jetzt gemerkt statt bei jedem Start auf „Audio/320“ zurückzuspringen.",
+        "Umschaltbares Design (hell/dunkel/Systemeinstellung).",
+        "Android: Download-Ordner frei wählbar statt fest auf den öffentlichen Downloads-Ordner.",
+        "Die Job-Liste scrollt jetzt korrekt innerhalb ihrer Karte statt über den Rand hinauszulaufen.",
+      ],
+      en: [
+        "Support for more platforms beyond YouTube: TikTok, Instagram, Twitter/X, SoundCloud, Vimeo and Twitch.",
+        "New Settings area: the last-used format/quality is now remembered instead of resetting to \"Audio/320\" on every launch.",
+        "Switchable theme (light/dark/system).",
+        "Android: choose the downloads folder instead of always saving to the public Downloads collection.",
+        "The job list now scrolls correctly inside its card instead of spilling past the edge.",
+      ],
+    },
+  },
+  {
     version: "1.9.0",
     date: "2026-09-03",
     notes: {
