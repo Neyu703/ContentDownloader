@@ -1,0 +1,50 @@
+# Shared by both services — same image, same mount point, same shutdown
+# behavior. `init: true` runs a tiny init process as PID 1 so SIGTERM
+# reaches tsx/Metro's actual child processes on `stop`/`down` instead of
+# waiting out the grace period and getting SIGKILLed.
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  working_dir: /app
+  init: true
+  restart: unless-stopped
+
+services:
+  server:
+    <<: *common
+    command: ["pnpm", "--filter", "server", "dev"]
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - CHOKIDAR_USEPOLLING=1
+      - CHOKIDAR_INTERVAL=300
+    volumes:
+      - ./server:/app/server
+      - server_node_modules:/app/server/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/ping').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  app:
+    <<: *common
+    command: ["pnpm", "--filter", "app", "web", "--port", "8082", "--host", "lan"]
+    ports:
+      - "8082:8082"
+    environment:
+      - EXPO_NO_TELEMETRY=1
+    volumes:
+      - ./app:/app/app
+      - app_node_modules:/app/app/node_modules
+      # Metro's transform cache defaults to $TMPDIR/metro-cache; a named
+      # volume keeps it warm across `down`/`--build`, not just `restart`
+      - metro_cache:/tmp/metro-cache
+
+volumes:
+  server_node_modules:
+  app_node_modules:
+  metro_cache:

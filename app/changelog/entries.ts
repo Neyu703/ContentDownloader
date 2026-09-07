@@ -9,6 +9,26 @@ export interface ChangelogEntry {
 /** Bundled release notes shown in the changelog modal — newest first. Append one entry per release. */
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.11.0",
+    date: "2026-09-07",
+    notes: {
+      de: [
+        "Bessere automatische Titel für Instagram/TikTok-Downloads, wenn yt-dlp nur einen Platzhalter liefert.",
+        "Der Titel eines fertigen Downloads lässt sich vor dem Speichern/Teilen direkt bearbeiten.",
+        "Diagnose-Logs protokollieren jetzt yt-dlp-/ffmpeg-Version und den kompletten Befehl pro Download.",
+        "Playlist-Auswahl bleibt jetzt korrekt, auch wenn ein Video erneut zur selben Playlist hinzugefügt wird.",
+        "Tab-Leiste zeigt jetzt Symbole für Start und Einstellungen.",
+      ],
+      en: [
+        "Better automatic titles for Instagram/TikTok downloads when yt-dlp only returns a placeholder.",
+        "A finished download's title can now be edited directly before saving or sharing.",
+        "Diagnostic logs now record the yt-dlp/ffmpeg version and the full command for each download.",
+        "Playlist selection now stays correct even when a video is re-added to the same playlist.",
+        "The tab bar now shows icons for Home and Settings.",
+      ],
+    },
+  },
+  {
     version: "1.10.0",
     date: "2026-09-05",
     notes: {
