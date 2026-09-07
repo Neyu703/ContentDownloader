@@ -32,7 +32,21 @@ Every commit bumps `app/app.json`'s `expo.version` and `expo.android.versionCode
 level (default, regardless of commit type), and `app/android/app/build.gradle`
 (`versionName`/`versionCode`) in the same pass — the two must never drift, check both whenever
 either is touched. Commit subjects start with the resulting version, leftmost:
-`[vX.Y.Z] type: subject`. Every commit that lands on `main` is tagged and released automatically
+`[vX.Y.Z] type: subject`.
+
+Every commit that bumps to a new `X.Y.0` (i.e. this commit is the one cutting the official
+release, per the rule above) must append a matching entry to
+[app/changelog/entries.ts](app/changelog/entries.ts) in the SAME commit — `version` set to the
+bumped `app.json` version, `date` today, `notes.de`/`notes.en` summarizing every user-facing
+`feat`/`fix` (per `commit-message-format`'s changelog-category table — not
+`chore`/`refactor`/`docs`/`style`/`test`, and not CI/release-tooling-only changes even if tagged
+`feat`/`fix`) since the previous `X.Y.0` entry, i.e. the same range the release's own
+"Changes since v{previous}" notes cover. Patch-level (`X.Y.Z`, `Z != 0`) commits do NOT get their
+own entry — their user-facing changes accumulate into the next `.0` entry. This file backs the
+in-app changelog modal (`ChangelogModal.tsx`, `SettingsScreen.tsx`) and must never fall behind the
+actual released `X.Y.0` versions.
+
+Every commit that lands on `main` is tagged and released automatically
 by `.github/workflows/auto-prerelease.yml`: an `X.0` (minor) version becomes a real GitHub
 **Release** marked `latest`; every other commit (`X.Y.Z` with `Z != 0`) becomes a GitHub
 **pre-release**. Either kind fires `.github/workflows/release-apk.yml` and attaches the
