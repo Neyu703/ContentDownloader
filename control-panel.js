@@ -6,7 +6,7 @@ const PORT = 4321;
 const ROOT = __dirname;
 
 const services = {
-  server: { label: "content-downloader-server (Port 3001)", args: ["--filter", "server", "dev"], child: null, probePort: 3001 },
+  server: { label: "content-downloader-server (Port 3001)", args: ["--filter", "app", "run", "server:dev"], child: null, probePort: 3001 },
   app: { label: "Expo App (Port 8081)", args: ["--filter", "app", "web"], child: null, probePort: 8081 },
 };
 

@@ -1,11 +1,10 @@
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
+jest.mock("node:child_process", () => ({ spawn: jest.fn() }));
 
 import { spawn } from "node:child_process";
-import * as cookies from "../../src/cookies.js";
-import { SoundCloud } from "../../src/platforms/SoundCloud.js";
+import * as cookies from "../../../server/cookies.js";
+import { SoundCloud } from "../../../server/platforms/SoundCloud.js";
 
 /**
  * PlaylistCapableBasePlatform's playlist listing is generic across every platform that supports
@@ -27,7 +26,7 @@ function createFakeChild() {
 
 /** Queues the next spawn() call to return this fake child. */
 function mockNextSpawn(child: ReturnType<typeof createFakeChild>) {
-  vi.mocked(spawn).mockReturnValueOnce(child as never);
+  jest.mocked(spawn).mockReturnValueOnce(child as never);
 }
 
 /** Runs a fake child to completion: emits stdout, then closes with the given exit code. */
@@ -38,7 +37,7 @@ async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: s
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
 });
 
 describe("fetchPlaylistInfo", () => {
@@ -115,13 +114,13 @@ describe("fetchPlaylistInfo", () => {
   });
 
   it("includes the --cookies flag when a cookies file is stored", async () => {
-    const cookiesArgsSpy = vi.spyOn(cookies, "cookiesArgs").mockReturnValue(["--cookies", "/data/cookies.txt"]);
+    const cookiesArgsSpy = jest.spyOn(cookies, "cookiesArgs").mockReturnValue(["--cookies", "/data/cookies.txt"]);
     const child = createFakeChild();
     mockNextSpawn(child);
     const promise = soundcloud().fetchPlaylistInfo();
     await resolveSpawn(child, "");
     await promise;
-    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
+    const args = jest.mocked(spawn).mock.calls[0][1] as string[];
     expect(args).toEqual(expect.arrayContaining(["--cookies", "/data/cookies.txt"]));
     cookiesArgsSpy.mockRestore();
   });
@@ -132,7 +131,7 @@ describe("fetchPlaylistInfo", () => {
     const promise = soundcloud().fetchPlaylistInfo();
     await resolveSpawn(child, "");
     await promise;
-    const args = vi.mocked(spawn).mock.calls[0][1] as string[];
+    const args = jest.mocked(spawn).mock.calls[0][1] as string[];
     const idx = args.indexOf("--playlist-items");
     expect(args[idx + 1]).toBe("1-50");
 
@@ -141,7 +140,7 @@ describe("fetchPlaylistInfo", () => {
     const promise2 = soundcloud().fetchPlaylistInfo(51, 25);
     await resolveSpawn(child2, "");
     await promise2;
-    const args2 = vi.mocked(spawn).mock.calls[1][1] as string[];
+    const args2 = jest.mocked(spawn).mock.calls[1][1] as string[];
     expect(args2[args2.indexOf("--playlist-items") + 1]).toBe("51-75");
   });
 });

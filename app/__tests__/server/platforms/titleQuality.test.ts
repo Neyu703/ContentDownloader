@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { isLowQualityTitle, pickTitle } from "../../src/platforms/titleQuality.js";
+import { isLowQualityTitle, pickTitle } from "../../../server/platforms/titleQuality.js";
 
 describe("isLowQualityTitle", () => {
   it("flags Instagram's synthesized 'Video by X' placeholder", () => {

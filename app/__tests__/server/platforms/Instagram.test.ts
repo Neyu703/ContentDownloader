@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { Instagram } from "../../src/platforms/Instagram.js";
+import { Instagram } from "../../../server/platforms/Instagram.js";
 
 function instagram(url = "https://www.instagram.com/p/abc123/") {
   return new Instagram(url);

@@ -2,7 +2,10 @@ import i18n from "../i18n";
 import { isFinishedPhase } from "../lib/format";
 import type { Downloader, DownloadRequest, JobPhase, JobState, PlaylistInfo, PreviewPatch, SetupState, VideoInfo } from "./types";
 
-const SERVER_URL = "http://localhost:3001";
+// In dev (`expo start --web`) the API runs as a separate process on its own port. In a production
+// export, the same Node process that serves this bundle also serves the API, so relative paths
+// resolve against the page's own origin — no separate URL, and no cross-port CORS involved.
+const SERVER_URL = __DEV__ ? "http://localhost:3001" : "";
 const POLL_INTERVAL_MS = 600;
 const PING_TIMEOUT_MS = 2000;
 

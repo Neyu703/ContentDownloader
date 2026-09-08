@@ -10,7 +10,7 @@
     {
       "name": "server",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "server", "dev"],
+      "runtimeArgs": ["--filter", "app", "run", "server:dev"],
       "port": 3001,
       "autoPort": true
     }

@@ -1,6 +1,5 @@
 packages:
   - "app"
-  - "server"
 allowBuilds:
   '@parcel/watcher': true
   '@vgpu/adapter-node': false

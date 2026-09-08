@@ -1,26 +1,26 @@
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const logWriteMock = vi.fn();
+const mockLogWrite = jest.fn();
 
-vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
-vi.mock("node:fs", () => ({
+jest.mock("node:child_process", () => ({ spawn: jest.fn() }));
+jest.mock("node:fs", () => ({
+  __esModule: true,
   default: {
-    readdirSync: vi.fn(),
-    statSync: vi.fn(),
-    unlinkSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    createWriteStream: vi.fn(() => ({ write: logWriteMock, on: vi.fn() })),
-    existsSync: vi.fn(),
+    readdirSync: jest.fn(),
+    statSync: jest.fn(),
+    unlinkSync: jest.fn(),
+    mkdirSync: jest.fn(),
+    createWriteStream: jest.fn(() => ({ write: mockLogWrite, on: jest.fn() })),
+    existsSync: jest.fn(),
   },
 }));
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { COOKIES_FILE } from "../../src/cookies.js";
-import * as environment from "../../src/environment.js";
-import type { ProgressUpdate } from "../../src/progress.js";
-import { TikTok } from "../../src/platforms/TikTok.js";
+import { COOKIES_FILE } from "../../../server/cookies.js";
+import * as environment from "../../../server/environment.js";
+import type { ProgressUpdate } from "../../../server/progress.js";
+import { TikTok } from "../../../server/platforms/TikTok.js";
 
 /**
  * BasePlatform's behavior is generic across every non-playlist platform — exercised here through
@@ -41,7 +41,7 @@ function createFakeChild() {
 
 /** Queues the next spawn() call to return this fake child. */
 function mockNextSpawn(child: ReturnType<typeof createFakeChild>) {
-  vi.mocked(spawn).mockReturnValueOnce(child as never);
+  jest.mocked(spawn).mockReturnValueOnce(child as never);
 }
 
 /** Runs a fake child to completion: emits stdout, then closes with the given exit code. */
@@ -53,17 +53,17 @@ async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: s
 
 /** Joins every line appended to the download log across all DownloadLogger calls made in a test. */
 function allLoggedContent(): string {
-  return logWriteMock.mock.calls.map(([content]) => content as string).join("");
+  return mockLogWrite.mock.calls.map(([content]) => content as string).join("");
 }
 
 beforeEach(() => {
-  vi.mocked(fs.existsSync).mockReturnValue(true);
-  vi.mocked(fs.readdirSync).mockReturnValue([] as never);
-  vi.mocked(fs.statSync).mockReturnValue({ size: 1024 * 1024, mtimeMs: 0 } as never);
+  jest.mocked(fs.existsSync).mockReturnValue(true);
+  jest.mocked(fs.readdirSync).mockReturnValue([] as never);
+  jest.mocked(fs.statSync).mockReturnValue({ size: 1024 * 1024, mtimeMs: 0 } as never);
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
 });
 
 describe("checkAvailability", () => {
@@ -141,7 +141,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
 
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "320", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "My Song" }));
 
@@ -164,7 +164,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     expect(updates[2]).toMatchObject({ stage: "downloading", progress: 50 });
     expect(updates[3]).toMatchObject({ stage: "converting", messageKey: "job.convertingAudio" });
 
-    const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    const downloadArgs = jest.mocked(spawn).mock.calls[1][1] as string[];
     expect(downloadArgs).toEqual(
       expect.arrayContaining(["-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "320K"])
     );
@@ -177,13 +177,13 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
 
-    const promise = tiktok().download("audio", "320", vi.fn());
+    const promise = tiktok().download("audio", "320", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
 
-    const infoArgs = vi.mocked(spawn).mock.calls[0][1] as string[];
-    const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    const infoArgs = jest.mocked(spawn).mock.calls[0][1] as string[];
+    const downloadArgs = jest.mocked(spawn).mock.calls[1][1] as string[];
     expect(infoArgs).toEqual(expect.arrayContaining(["--cookies", COOKIES_FILE]));
     expect(downloadArgs).toEqual(expect.arrayContaining(["--cookies", COOKIES_FILE]));
   });
@@ -194,7 +194,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
 
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("video", "720", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "My Video" }));
     downloadChild.stdout.emit("data", Buffer.from("[ffmpeg] merging\n"));
@@ -208,7 +208,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     expect(updates.at(-2)).toMatchObject({ stage: "converting", messageKey: "job.convertingVideo" });
     expect(updates.at(-1)).toMatchObject({ stage: "converting", messageKey: "job.merging" });
 
-    const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    const downloadArgs = jest.mocked(spawn).mock.calls[1][1] as string[];
     expect(downloadArgs).toEqual(expect.arrayContaining(["-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best[height<=720]"]));
   });
 
@@ -217,11 +217,11 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const promise = tiktok().download("video", "best", vi.fn());
+    const promise = tiktok().download("video", "best", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
-    const downloadArgs = vi.mocked(spawn).mock.calls[1][1] as string[];
+    const downloadArgs = jest.mocked(spawn).mock.calls[1][1] as string[];
     expect(downloadArgs).toEqual(expect.arrayContaining(["-f", "bestvideo+bestaudio/best/best"]));
   });
 
@@ -230,7 +230,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     onProgress.mockClear();
@@ -245,7 +245,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit(
@@ -266,7 +266,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  20.0% of ~10.00Xyz\n"));
@@ -283,7 +283,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  75.0% of ~5.00MiB at 2.00MiB/s\n"));
@@ -299,7 +299,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  5.0% of ~1024.00KiB\n"));
@@ -315,7 +315,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const onProgress = vi.fn();
+    const onProgress = jest.fn();
     const promise = tiktok().download("audio", "128", onProgress);
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stdout.emit("data", Buffer.from("[download]  1.0% of ~500B\n"));
@@ -328,7 +328,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
 
   describe("retry on transient failure", () => {
     it("retries once and succeeds on the second attempt, emitting a retry progress message", async () => {
-      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      jest.useFakeTimers({ toFake: ["setTimeout"] });
       try {
         const infoChild = createFakeChild();
         const downloadChild1 = createFakeChild();
@@ -337,14 +337,14 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
         mockNextSpawn(downloadChild1);
         mockNextSpawn(downloadChild2);
 
-        const onProgress = vi.fn();
+        const onProgress = jest.fn();
         const promise = tiktok().download("audio", "320", onProgress);
         await resolveSpawn(infoChild, JSON.stringify({ title: "My Song" }));
 
         downloadChild1.stderr.emit("data", Buffer.from("HTTP Error 403: Forbidden"));
         downloadChild1.emit("close", 1);
         await Promise.resolve();
-        await vi.advanceTimersByTimeAsync(2000);
+        await jest.advanceTimersByTimeAsync(2000);
 
         await resolveSpawn(downloadChild2, "");
         const result = await promise;
@@ -360,19 +360,19 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
         );
         expect(spawn).toHaveBeenCalledTimes(3);
       } finally {
-        vi.useRealTimers();
+        jest.useRealTimers();
       }
     });
 
     it("exhausts all attempts on repeated transient failures and rejects with the last error", async () => {
-      vi.useFakeTimers({ toFake: ["setTimeout"] });
+      jest.useFakeTimers({ toFake: ["setTimeout"] });
       try {
         const infoChild = createFakeChild();
         const downloadChildren = [createFakeChild(), createFakeChild(), createFakeChild()];
         mockNextSpawn(infoChild);
         downloadChildren.forEach(mockNextSpawn);
 
-        const promise = tiktok().download("audio", "320", vi.fn());
+        const promise = tiktok().download("audio", "320", jest.fn());
         await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
 
         for (const [index, child] of downloadChildren.entries()) {
@@ -380,7 +380,7 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
           child.emit("close", 1);
           if (index < downloadChildren.length - 1) {
             await Promise.resolve();
-            await vi.advanceTimersByTimeAsync(2000);
+            await jest.advanceTimersByTimeAsync(2000);
           }
         }
 
@@ -392,33 +392,33 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
         expect(written).toContain("FAILED after");
         expect(written).toContain("HTTP Error 403: Forbidden");
       } finally {
-        vi.useRealTimers();
+        jest.useRealTimers();
       }
     });
   });
 
   it("logs a known yt-dlp version and ffmpeg availability when present", async () => {
-    vi.spyOn(environment, "getYtDlpVersion").mockReturnValue("2026.01.01");
-    vi.spyOn(environment, "isFfmpegAvailable").mockReturnValue(true);
+    jest.spyOn(environment, "getYtDlpVersion").mockReturnValue("2026.01.01");
+    jest.spyOn(environment, "isFfmpegAvailable").mockReturnValue(true);
     const infoChild = createFakeChild();
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const promise = tiktok().download("audio", "128", vi.fn());
+    const promise = tiktok().download("audio", "128", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
     expect(allLoggedContent()).toContain("yt-dlp=2026.01.01 ffmpeg=available");
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
   });
 
   it("logs the result as unknown size when the finished file doesn't exist on disk", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    jest.mocked(fs.existsSync).mockReturnValue(false);
     const infoChild = createFakeChild();
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const promise = tiktok().download("audio", "128", vi.fn());
+    const promise = tiktok().download("audio", "128", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
@@ -430,10 +430,10 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    vi.mocked(fs.statSync).mockImplementation(() => {
+    jest.mocked(fs.statSync).mockImplementation(() => {
       throw new Error("EPERM");
     });
-    const promise = tiktok().download("audio", "128", vi.fn());
+    const promise = tiktok().download("audio", "128", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;
@@ -446,11 +446,11 @@ describe("download / parseProgressLine / buildFormatArgs (via download)", () => 
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
     const files = Array.from({ length: 12 }, (_, i) => `old-${i}.log`);
-    vi.mocked(fs.readdirSync).mockReturnValue(files as never);
-    vi.mocked(fs.statSync).mockImplementation(
+    jest.mocked(fs.readdirSync).mockReturnValue(files as never);
+    jest.mocked(fs.statSync).mockImplementation(
       (p) => ({ mtimeMs: Number(String(p).match(/old-(\d+)/)?.[1] ?? 0) }) as never
     );
-    const promise = tiktok().download("audio", "128", vi.fn());
+    const promise = tiktok().download("audio", "128", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.emit("close", 0);
     await promise;

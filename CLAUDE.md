@@ -1,30 +1,63 @@
 # ContentDownloader
 
-pnpm monorepo with two workspaces:
+pnpm monorepo with a single workspace package, `app/` — an Expo/React Native app (Expo SDK 57,
+React Native 0.86) that also contains its own backend:
 
-- `server/` — Express 5 + TypeScript API (ESM, run via `tsx`). Entry point
-  `server/src/index.ts`, routes in `server/src/app.ts`. Download logic is
-  split per platform under `server/src/platforms/` (YouTube, TikTok,
-  Instagram, Twitter/X, SoundCloud, Vimeo, Twitch), all shelling out to the
-  external binaries `yt-dlp` and `ffmpeg` — both must be on `PATH` for
-  downloads to actually work (the `.claude/hooks/session-start.sh`
-  SessionStart hook installs them automatically in Claude Code on the web).
-- `app/` — Expo/React Native app (Expo SDK 57, React Native 0.86), including a
-  native Android module at `app/modules/ytdlp`. **Expo has changed
-  significantly since older training data** — read `app/AGENTS.md` and the
-  versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing app
-  code.
+- `app/` (RN/Android/Web UI) — native Android module at `app/modules/ytdlp`. **Expo has changed
+  significantly since older training data** — read `app/AGENTS.md` and the versioned docs at
+  https://docs.expo.dev/versions/v57.0.0/ before writing app code.
+- `app/server/` — plain Node `http` API (no framework; ESM, run via `tsx`), a subfolder of the
+  same `app` package, not a separate workspace. Entry point `app/server/index.ts`, routing in
+  `app/server/app.ts`. Download logic is split per platform under `app/server/platforms/`
+  (YouTube, TikTok, Instagram, Twitter/X, SoundCloud, Vimeo, Twitch), all shelling out to the
+  external binaries `yt-dlp` and `ffmpeg` — both must be on `PATH` for downloads to actually work
+  (the `.claude/hooks/session-start.sh` SessionStart hook installs them automatically in Claude
+  Code on the web). `app.ts` also serves the exported Expo web build from `app/server/public/`
+  (see `export:web` below) for any `GET` that isn't `/api/*` — in production this is the entire
+  "web" deployable: one process, one port, API + UI together, one Docker container. yt-dlp/ffmpeg
+  can't run in a browser (no process spawn, no CORS on the target CDNs), so this backend stays
+  necessary even though Android needs none of it — Android already bundles yt-dlp/ffmpeg natively
+  via `app/modules/ytdlp` and never talks to `app/server/`.
+
+`app/server/` has its own `tsconfig.json` (NodeNext/ES2022, separate from `app/tsconfig.json`'s
+Expo/RN target) — Metro never bundles it, since nothing in the RN code imports it.
 
 ## Commands
 
 - `pnpm install` (`make install`) — install all workspace dependencies
-- `pnpm --filter server dev` (`make dev-server`) — server dev mode, port 3001
-- `pnpm --filter server build` (`make build-server`) — typecheck/build server
-- `pnpm --filter server start` (`make start-server`) — run built server
-- `pnpm --filter app web` (`make dev-app`) — Expo web dev server, port 8081
+- `pnpm --filter app run server:dev` (`make dev-server`) — backend dev mode (`tsx watch`), port 3001
+- `pnpm --filter app run server:build` (`make build-server`) — typecheck/build the backend
+  (`tsc -p app/server/tsconfig.json` → `app/server/dist/`)
+- `pnpm --filter app export:web` (`make build-web`) — export the Expo web app into
+  `app/server/public/` (build artifact, gitignored)
+- `pnpm --filter app run server:start` (`make start-server`) — run the built backend; serves the
+  API and, once `build-web` has run, the web UI on the same port
+- `pnpm --filter app web` (`make dev-app`) — Expo web **dev** server with hot reload, port 8081;
+  talks to the separate backend dev process on 3001 (still needs CORS, unlike the merged prod
+  deploy) — a manual, non-Docker dev convenience for iterating on the UI with hot reload
 
-No lint tooling is configured in this repo. Tests: `pnpm --filter server test` (vitest) and
-`pnpm --filter app test` (jest), both enforcing 100% coverage thresholds.
+`docker-compose.yml` has a single `web` service (`make docker-up`/`docker-build`) — one container
+running both `server:dev` (tsx watch, port 3001) and the Expo web dev server (Metro, hot reload,
+port 8082) side by side. `make docker-up` runs `docker compose up --watch`, not a bind mount:
+Metro's and Node's `fs.watch`-based watchers never see writes made to a Windows-host bind mount
+(Docker Desktop doesn't propagate those as inotify events into the container), so hot reload
+instead relies on Compose Watch's `develop.watch.sync` rule in `docker-compose.yml` — it watches
+the host side (reliable on Windows) and writes changed files into the container as real writes,
+which *does* trigger Metro/tsx's watchers. The Dockerfile bakes in a full `app/` source snapshot
+at build time as the container's starting point (see its `COPY app ./app`); rebuild the image
+(`make docker-build`) after pulling changes that didn't come through your own live-synced edits.
+`-d` and `--watch` can't be combined, so this container runs attached (Ctrl+C stops it) — this is
+the dev convenience container, not the production artifact: production "web" is just
+`make build-server && make build-web && make start-server` (one process, one port, no hot reload,
+no Docker needed).
+
+Production "web" deploy is `make build-server && make build-web && make start-server` (or
+`docker compose up` for the containerized equivalent) — one process, one port, one container.
+`app/downloader/index.web.ts`'s `SERVER_URL` constant is `__DEV__`-conditional: dev points at
+`http://localhost:3001`, a production export uses relative (same-origin) paths.
+
+No lint tooling is configured in this repo. Tests: `pnpm --filter app test` (jest), enforcing
+100% coverage thresholds across the whole package — RN/Android code and `app/server/` alike.
 
 ## Versioning
 

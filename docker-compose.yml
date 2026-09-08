@@ -1,50 +1,64 @@
-# Shared by both services — same image, same mount point, same shutdown
-# behavior. `init: true` runs a tiny init process as PID 1 so SIGTERM
-# reaches tsx/Metro's actual child processes on `stop`/`down` instead of
-# waiting out the grace period and getting SIGKILLed.
-x-common: &common
-  build:
-    context: .
-    dockerfile: Dockerfile
-  working_dir: /app
-  init: true
-  restart: unless-stopped
-
+# Single dev container: runs the backend in watch mode (tsx) AND the Expo web dev server
+# (Metro, hot reload) side by side — one container, two processes, two ports.
+#
+# No bind mount for ./app: Metro's (and Node's fs.watch-based) file watcher never sees writes
+# made to a Windows-host bind mount — Docker Desktop doesn't propagate those as inotify events
+# into the container. Instead, `develop.watch` below syncs ./app in (initial full sync, then
+# incremental) via `docker compose up --watch` — Compose watches the host side itself (reliable
+# on Windows) and writes changed files into the container as real, in-container writes, which
+# *does* generate a proper inotify event Metro/tsx can see. A `sync` rule and a bind mount to the
+# same target are mutually exclusive (Compose disables the sync if both are present), so don't
+# add one back.
+#
+# `init: true` runs a tiny init process as PID 1 so SIGTERM reaches tsx's/Metro's actual child
+# processes on `stop`/`down` instead of waiting out the grace period and getting SIGKILLed.
+#
+# This is a dev convenience, not the production artifact — production "web" is just
+# `make build-server && make build-web && make start-server` (no hot reload, no Docker needed).
 services:
-  server:
-    <<: *common
-    command: ["pnpm", "--filter", "server", "dev"]
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    init: true
+    restart: unless-stopped
+    command: >
+      sh -c "pnpm --filter app run server:dev &
+             exec pnpm --filter app web --port 8082 --host lan"
     ports:
       - "3001:3001"
+      - "8082:8082"
     environment:
       - PORT=3001
+      - EXPO_NO_TELEMETRY=1
       - CHOKIDAR_USEPOLLING=1
       - CHOKIDAR_INTERVAL=300
     volumes:
-      - ./server:/app/server
-      - server_node_modules:/app/server/node_modules
+      - app_node_modules:/app/app/node_modules
+      # Metro's transform cache defaults to $TMPDIR/metro-cache; a named volume keeps it warm
+      # across `down`/`--build`, not just `restart`.
+      - metro_cache:/tmp/metro-cache
+    develop:
+      # See the file-level comment above — this replaces the usual bind mount for ./app.
+      watch:
+        - action: sync
+          path: ./app
+          target: /app/app
+          ignore:
+            - node_modules/
+            - server/dist/
+            - server/public/
+            - .expo/
+        - action: rebuild
+          path: ./app/package.json
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/ping').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 10s
-
-  app:
-    <<: *common
-    command: ["pnpm", "--filter", "app", "web", "--port", "8082", "--host", "lan"]
-    ports:
-      - "8082:8082"
-    environment:
-      - EXPO_NO_TELEMETRY=1
-    volumes:
-      - ./app:/app/app
-      - app_node_modules:/app/app/node_modules
-      # Metro's transform cache defaults to $TMPDIR/metro-cache; a named
-      # volume keeps it warm across `down`/`--build`, not just `restart`
-      - metro_cache:/tmp/metro-cache
+      start_period: 30s
 
 volumes:
-  server_node_modules:
   app_node_modules:
   metro_cache:

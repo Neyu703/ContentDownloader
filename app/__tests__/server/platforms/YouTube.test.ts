@@ -1,23 +1,23 @@
 import { EventEmitter } from "node:events";
-import { afterEach, describe, expect, it, vi } from "vitest";
 
-const logWriteMock = vi.fn();
+const mockLogWrite = jest.fn();
 
-vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
-vi.mock("node:fs", () => ({
+jest.mock("node:child_process", () => ({ spawn: jest.fn() }));
+jest.mock("node:fs", () => ({
+  __esModule: true,
   default: {
-    readdirSync: vi.fn().mockReturnValue([]),
-    statSync: vi.fn(),
-    unlinkSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    createWriteStream: vi.fn(() => ({ write: logWriteMock, on: vi.fn() })),
-    existsSync: vi.fn().mockReturnValue(false),
+    readdirSync: jest.fn().mockReturnValue([]),
+    statSync: jest.fn(),
+    unlinkSync: jest.fn(),
+    mkdirSync: jest.fn(),
+    createWriteStream: jest.fn(() => ({ write: mockLogWrite, on: jest.fn() })),
+    existsSync: jest.fn().mockReturnValue(false),
   },
 }));
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { YouTube } from "../../src/platforms/YouTube.js";
+import { YouTube } from "../../../server/platforms/YouTube.js";
 
 function youtube(url = "https://www.youtube.com/watch?v=x") {
   return new YouTube(url);
@@ -32,7 +32,7 @@ function createFakeChild() {
 }
 
 function mockNextSpawn(child: ReturnType<typeof createFakeChild>) {
-  vi.mocked(spawn).mockReturnValueOnce(child as never);
+  jest.mocked(spawn).mockReturnValueOnce(child as never);
 }
 
 async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: string, code = 0) {
@@ -42,7 +42,7 @@ async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: s
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
 });
 
 describe("isRetryableError", () => {
@@ -100,7 +100,7 @@ describe("defaultThumbnail", () => {
 
 /** Joins every line appended to the download log across all DownloadLogger calls made in a test. */
 function allLoggedContent(): string {
-  return logWriteMock.mock.calls.map(([content]) => content as string).join("");
+  return mockLogWrite.mock.calls.map(([content]) => content as string).join("");
 }
 
 describe("download", () => {
@@ -109,7 +109,7 @@ describe("download", () => {
     const downloadChild = createFakeChild();
     mockNextSpawn(infoChild);
     mockNextSpawn(downloadChild);
-    const promise = youtube().download("audio", "128", vi.fn());
+    const promise = youtube().download("audio", "128", jest.fn());
     await resolveSpawn(infoChild, JSON.stringify({ title: "T" }));
     downloadChild.stderr.emit("data", Buffer.from("ERROR: Sign in to confirm you're not a bot"));
     downloadChild.emit("close", 1);

@@ -34,6 +34,9 @@ downloads/
 logs/
 data/
 
+# exported web build the server serves (see app/package.json's export:web)
+app/server/public/
+
 # logs
 *.log
 npm-debug.*

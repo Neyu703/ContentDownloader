@@ -30,9 +30,13 @@
     "@react-native/jest-preset": "0.86.2",
     "@testing-library/react-native": "14.0.1",
     "@types/jest": "30.0.0",
+    "@types/node": "26.2.0",
     "@types/react": "~19.2.2",
+    "@types/supertest": "7.2.1",
     "jest": "30.5.1",
     "jest-expo": "57.0.5",
+    "supertest": "7.2.2",
+    "tsx": "4.23.12",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -40,6 +44,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "export:web": "expo export -p web --output-dir server/public",
+    "server:dev": "cd server && tsx watch index.ts",
+    "server:build": "tsc -p server/tsconfig.json",
+    "server:start": "cd server && node dist/index.js",
     "test": "jest",
     "test:coverage": "jest --coverage"
   },
@@ -47,7 +55,8 @@
   "jest": {
     "preset": "jest-expo",
     "moduleNameMapper": {
-      "\\.css$": "<rootDir>/jest.cssMock.js"
+      "\\.css$": "<rootDir>/jest.cssMock.js",
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "transformIgnorePatterns": [
       "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|vgpu|@vgpu|webgpu|@webgpu|wgpu-matrix))",
@@ -62,6 +71,9 @@
       "!index.ts",
       "!jest-globals.d.ts",
       "!modules/ytdlp/android/**",
+      "!server/index.ts",
+      "!server/dist/**",
+      "!server/public/**",
       "!backgrounds/aeroShards/AeroShards.tsx",
       "!backgrounds/ghostFibers/GhostFibers.tsx",
       "!.expo/**"

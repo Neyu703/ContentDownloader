@@ -1,25 +1,25 @@
 import fs from "node:fs";
+import { waitFor } from "@testing-library/react-native";
 import path from "node:path";
-import express from "express";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PassThrough } from "node:stream";
 import request from "supertest";
 
-vi.mock("../src/platforms/registry.js", () => ({ detectPlatform: vi.fn() }));
+jest.mock("../../server/platforms/registry.js", () => ({ detectPlatform: jest.fn() }));
 // The real functions already write to server/data/cookies.txt — a path shared with a locally
 // running dev server's actual imported cookies. Mocked here so this test file never touches that
 // real file (confirmed the hard way: a host-side test run once deleted a real cookies.txt while
 // the Docker dev server had one imported, since both share the same bind-mounted directory).
-vi.mock("../src/cookies.js", () => ({
-  saveCookies: vi.fn(),
-  deleteCookies: vi.fn(),
-  getCookiesStatus: vi.fn(),
+jest.mock("../../server/cookies.js", () => ({
+  saveCookies: jest.fn(),
+  deleteCookies: jest.fn(),
+  getCookiesStatus: jest.fn(),
 }));
 
-import { app } from "../src/app.js";
-import { deleteCookies, getCookiesStatus, saveCookies } from "../src/cookies.js";
-import { detectPlatform } from "../src/platforms/registry.js";
-import { DOWNLOADS_DIR } from "../src/environment.js";
-import type { Platform } from "../src/platforms/Platform.js";
+import { app } from "../../server/app.js";
+import { deleteCookies, getCookiesStatus, saveCookies } from "../../server/cookies.js";
+import { detectPlatform } from "../../server/platforms/registry.js";
+import { DOWNLOADS_DIR } from "../../server/environment.js";
+import type { Platform } from "../../server/platforms/Platform.js";
 
 const VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
@@ -33,12 +33,12 @@ function describeErrorLikeBasePlatform(err: unknown): { key: string; params: { r
 function fakePlatform() {
   return {
     id: "fake",
-    checkAvailability: vi.fn(),
-    fetchInfo: vi.fn(),
-    buildFormatArgs: vi.fn(),
-    download: vi.fn(),
-    isRetryableError: vi.fn(),
-    describeError: vi.fn(describeErrorLikeBasePlatform),
+    checkAvailability: jest.fn(),
+    fetchInfo: jest.fn(),
+    buildFormatArgs: jest.fn(),
+    download: jest.fn(),
+    isRetryableError: jest.fn(),
+    describeError: jest.fn(describeErrorLikeBasePlatform),
   };
 }
 
@@ -46,8 +46,8 @@ function fakePlatform() {
 function fakePlaylistPlatform() {
   return {
     ...fakePlatform(),
-    fetchPlaylistInfo: vi.fn(),
-    defaultThumbnail: vi.fn(),
+    fetchPlaylistInfo: jest.fn(),
+    defaultThumbnail: jest.fn(),
   };
 }
 
@@ -55,7 +55,7 @@ let platform: ReturnType<typeof fakePlaylistPlatform>;
 
 beforeEach(() => {
   platform = fakePlaylistPlatform();
-  vi.mocked(detectPlatform).mockImplementation((url: string) =>
+  jest.mocked(detectPlatform).mockImplementation((url: string) =>
     url === VALID_URL ? (platform as unknown as Platform) : null
   );
 });
@@ -70,7 +70,7 @@ describe("GET /api/ping", () => {
 
 describe("/api/cookies", () => {
   it("reports the current status", async () => {
-    vi.mocked(getCookiesStatus).mockReturnValueOnce({ present: false, updatedAt: null });
+    jest.mocked(getCookiesStatus).mockReturnValueOnce({ present: false, updatedAt: null });
     const res = await request(app).get("/api/cookies");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ present: false, updatedAt: null });
@@ -98,7 +98,7 @@ describe("/api/cookies", () => {
   });
 
   it("stores cookies and logs the import", async () => {
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleLog = jest.spyOn(console, "log").mockImplementation(() => {});
 
     const importRes = await request(app).post("/api/cookies").send({ cookies: "# Netscape HTTP Cookie File\n" });
 
@@ -111,7 +111,7 @@ describe("/api/cookies", () => {
   });
 
   it("removes cookies and logs the removal", async () => {
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleLog = jest.spyOn(console, "log").mockImplementation(() => {});
 
     const deleteRes = await request(app).delete("/api/cookies");
 
@@ -145,6 +145,15 @@ describe("GET /api/info", () => {
     expect(res.body.errorKey).toBe("errors.raw");
     expect(res.body.errorParams).toEqual({ raw: "boom" });
   });
+
+  it("falls back to a plain 500 when a handler throws synchronously instead of rejecting", async () => {
+    jest.mocked(detectPlatform).mockImplementationOnce(() => {
+      throw new Error("unexpected synchronous failure");
+    });
+    const res = await request(app).get("/api/info").query({ url: VALID_URL });
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ errorKey: "errors.unknown" });
+  });
 });
 
 describe("GET /api/playlist-info", () => {
@@ -154,7 +163,7 @@ describe("GET /api/playlist-info", () => {
   });
 
   it("400s with errors.playlistNotSupported when the platform doesn't support playlists", async () => {
-    vi.mocked(detectPlatform).mockImplementation((url: string) =>
+    jest.mocked(detectPlatform).mockImplementation((url: string) =>
       url === VALID_URL ? (fakePlatform() as unknown as Platform) : null
     );
     const res = await request(app).get("/api/playlist-info").query({ url: VALID_URL });
@@ -210,6 +219,12 @@ describe("POST /api/convert", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400s with errors.invalidJson on a malformed JSON body", async () => {
+    const res = await request(app).post("/api/convert").set("Content-Type", "application/json").send("{not valid json");
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ errorKey: "errors.invalidJson" });
+  });
+
   it("400s on an invalid format", async () => {
     const res = await request(app).post("/api/convert").send({ url: VALID_URL, format: "pdf", quality: "320" });
     expect(res.status).toBe(400);
@@ -238,7 +253,9 @@ describe("POST /api/convert", () => {
       capturedOnProgress = onProgress;
       return new Promise((resolve) => {
         onProgress({ stage: "fetching_info", messageKey: "job.fetchingInfo", progress: null });
-        setTimeout(() => resolve({ id: "file-id", filePath: "/x", title: "Song", ext: "mp3" }), 5);
+        // Long enough that the "fetching_info" intermediate check below reliably runs first —
+        // Jest's per-request overhead (vs. vitest's) made a 5ms window flaky in practice.
+        setTimeout(() => resolve({ id: "file-id", filePath: "/x", title: "Song", ext: "mp3" }), 50);
       });
     });
 
@@ -253,7 +270,7 @@ describe("POST /api/convert", () => {
     const intermediate = await request(app).get(`/api/job/${jobId}`);
     expect(intermediate.body.stage).toBe("fetching_info");
 
-    await vi.waitFor(async () => {
+    await waitFor(async () => {
       const res = await request(app).get(`/api/job/${jobId}`);
       expect(res.body.stage).toBe("done");
     });
@@ -262,7 +279,7 @@ describe("POST /api/convert", () => {
   });
 
   it("evicts a finished job from the map after the TTL elapses", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    jest.useFakeTimers({ toFake: ["setTimeout"] });
     try {
       platform.download.mockResolvedValueOnce({ id: "x", filePath: "/x", title: "T", ext: "mp3" });
       const startRes = await request(app)
@@ -273,11 +290,11 @@ describe("POST /api/convert", () => {
       const doneRes = await request(app).get(`/api/job/${jobId}`);
       expect(doneRes.body.stage).toBe("done");
 
-      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+      await jest.advanceTimersByTimeAsync(10 * 60 * 1000);
       const afterRes = await request(app).get(`/api/job/${jobId}`);
       expect(afterRes.status).toBe(404);
     } finally {
-      vi.useRealTimers();
+      jest.useRealTimers();
     }
   });
 
@@ -288,7 +305,7 @@ describe("POST /api/convert", () => {
       .send({ url: VALID_URL, format: "audio", quality: "320" });
     const { jobId } = startRes.body;
 
-    await vi.waitFor(async () => {
+    await waitFor(async () => {
       const res = await request(app).get(`/api/job/${jobId}`);
       expect(res.body.stage).toBe("error");
     });
@@ -302,6 +319,12 @@ describe("GET /api/job/:jobId", () => {
   it("404s for an unknown job id", async () => {
     const res = await request(app).get("/api/job/does-not-exist");
     expect(res.status).toBe(404);
+  });
+
+  it("404s for a non-GET method against a path-param route instead of matching it", async () => {
+    const res = await request(app).post("/api/job/does-not-exist");
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ errorKey: "errors.notFound" });
   });
 });
 
@@ -328,7 +351,7 @@ describe("GET /api/download/:id", () => {
     const res = await request(app).get(`/api/download/${id}`).query({ name: 'My<>Song' });
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toContain("MySong.mp3");
-    await vi.waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
+    await waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
   });
 
   it("falls back to 'audio' when ?name= strips down to nothing but illegal characters", async () => {
@@ -339,24 +362,26 @@ describe("GET /api/download/:id", () => {
     const res = await request(app).get(`/api/download/${id}`).query({ name: "<<<>>>" });
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toContain("audio.mp3");
-    await vi.waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
+    await waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
   });
 
   it("responds 500 and keeps the file when the transfer errors before headers are sent", async () => {
     const id = "44444444-4444-4444-4444-444444444444";
     const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
     fs.writeFileSync(filePath, "fake audio content");
-    const downloadSpy = vi
-      .spyOn(express.response, "download")
-      .mockImplementation(function (this: unknown, ..._args: unknown[]) {
-        (_args[2] as (err: Error) => void)(new Error("transfer failed"));
-      });
+    // A fake read stream whose pipe() never writes anything before erroring — headers are still unsent.
+    const fakeStream = new PassThrough();
+    const createReadStreamSpy = jest.spyOn(fs, "createReadStream").mockReturnValue(fakeStream as never);
+    fakeStream.pipe = ((dest: NodeJS.WritableStream) => {
+      process.nextTick(() => fakeStream.emit("error", new Error("transfer failed")));
+      return dest;
+    }) as typeof fakeStream.pipe;
 
     const res = await request(app).get(`/api/download/${id}`);
 
     expect(res.status).toBe(500);
     expect(fs.existsSync(filePath)).toBe(true);
-    downloadSpy.mockRestore();
+    createReadStreamSpy.mockRestore();
     fs.unlinkSync(filePath);
   });
 
@@ -364,20 +389,35 @@ describe("GET /api/download/:id", () => {
     const id = "55555555-5555-5555-5555-555555555555";
     const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
     fs.writeFileSync(filePath, "fake audio content");
-    const downloadSpy = vi
-      .spyOn(express.response, "download")
-      .mockImplementation(function (this: import("express").Response, ..._args: unknown[]) {
-        this.status(200).write("partial content");
-        (_args[2] as (err: Error) => void)(new Error("connection dropped mid-transfer"));
-        this.end();
-      });
+    // A fake read stream whose pipe() writes once (flushing headers) before erroring.
+    const fakeStream = new PassThrough();
+    const createReadStreamSpy = jest.spyOn(fs, "createReadStream").mockReturnValue(fakeStream as never);
+    fakeStream.pipe = ((dest: NodeJS.WritableStream) => {
+      dest.write("partial content");
+      fakeStream.emit("error", new Error("connection dropped mid-transfer"));
+      return dest;
+    }) as typeof fakeStream.pipe;
 
     const res = await request(app).get(`/api/download/${id}`);
 
     expect(res.status).toBe(200);
+    expect(res.text).toBe("partial content");
     expect(fs.existsSync(filePath)).toBe(true);
-    downloadSpy.mockRestore();
+    createReadStreamSpy.mockRestore();
     fs.unlinkSync(filePath);
+  });
+
+  it("streams a non-ASCII title via the RFC 5987 filename* fallback", async () => {
+    const id = "66666666-6666-6666-6666-666666666666";
+    const filePath = path.join(DOWNLOADS_DIR, `${id}.mp3`);
+    fs.writeFileSync(filePath, "fake audio content");
+
+    const res = await request(app).get(`/api/download/${id}`).query({ name: "Zürich Café" });
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toContain('filename="Z_rich Caf_.mp3"');
+    expect(res.headers["content-disposition"]).toContain("filename*=UTF-8''Z%C3%BCrich%20Caf%C3%A9.mp3");
+    await waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
   });
 
   it("falls back to 'download' as the filename when ?name= is omitted", async () => {
@@ -388,7 +428,7 @@ describe("GET /api/download/:id", () => {
     const res = await request(app).get(`/api/download/${id}`);
     expect(res.status).toBe(200);
     expect(res.headers["content-disposition"]).toContain("download.mp4");
-    await vi.waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
+    await waitFor(() => expect(fs.existsSync(filePath)).toBe(false));
   });
 });
 
@@ -410,8 +450,105 @@ describe("CORS", () => {
   });
 });
 
+describe("CORS preflight (OPTIONS)", () => {
+  it("responds 204 and echoes the requested headers for an allowed origin", async () => {
+    const res = await request(app)
+      .options("/api/convert")
+      .set("Origin", "http://localhost:8081")
+      .set("Access-Control-Request-Method", "POST")
+      .set("Access-Control-Request-Headers", "Content-Type");
+    expect(res.status).toBe(204);
+    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:8081");
+    expect(res.headers["access-control-allow-methods"]).toContain("POST");
+    expect(res.headers["access-control-allow-headers"]).toBe("Content-Type");
+  });
+
+  it("falls back to Content-Type when no Access-Control-Request-Headers was sent", async () => {
+    const res = await request(app).options("/api/convert").set("Origin", "http://localhost:8081");
+    expect(res.status).toBe(204);
+    expect(res.headers["access-control-allow-headers"]).toBe("Content-Type");
+  });
+
+  it("rejects a preflight from a disallowed origin", async () => {
+    const res = await request(app).options("/api/convert").set("Origin", "https://evil.example.com");
+    expect(res.status).toBe(500);
+  });
+});
+
+describe("static web build", () => {
+  const PUBLIC_DIR = path.join(process.cwd(), "public");
+
+  beforeEach(() => {
+    fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+    fs.writeFileSync(path.join(PUBLIC_DIR, "index.html"), "<html>shell</html>");
+    fs.writeFileSync(path.join(PUBLIC_DIR, "app.js"), "console.log('hi')");
+  });
+
+  afterEach(() => {
+    fs.rmSync(PUBLIC_DIR, { recursive: true, force: true });
+  });
+
+  it("serves a known asset with the matching content type", async () => {
+    const res = await request(app).get("/app.js");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/javascript");
+    expect(res.text).toBe("console.log('hi')");
+  });
+
+  it("falls back to application/octet-stream for an unrecognized extension", async () => {
+    fs.writeFileSync(path.join(PUBLIC_DIR, "asset.bin"), "raw bytes");
+    const res = await request(app).get("/asset.bin");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/octet-stream");
+  });
+
+  it("serves index.html for the root path", async () => {
+    const res = await request(app).get("/");
+    expect(res.status).toBe(200);
+    expect(res.text).toBe("<html>shell</html>");
+  });
+
+  it("falls back to index.html for an unknown SPA navigation path", async () => {
+    const res = await request(app).get("/settings");
+    expect(res.status).toBe(200);
+    expect(res.text).toBe("<html>shell</html>");
+  });
+
+  it("404s for a missing asset that looks like a file (has an extension)", async () => {
+    const res = await request(app).get("/does-not-exist.png");
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ errorKey: "errors.notFound" });
+  });
+
+  it("does not let /api/* fall through to the static handler", async () => {
+    const res = await request(app).get("/api/does-not-exist");
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ errorKey: "errors.notFound" });
+  });
+
+  it("closes the connection instead of hanging when a handler throws after sending headers", async () => {
+    const createReadStreamSpy = jest.spyOn(fs, "createReadStream").mockImplementationOnce(() => {
+      throw new Error("disk read failed after headers were already written");
+    });
+
+    const res = await request(app).get("/app.js");
+
+    expect(res.status).toBe(200);
+    expect(res.text).toBe("");
+    createReadStreamSpy.mockRestore();
+  });
+
+  it("can't escape PUBLIC_DIR via an encoded '..' segment", async () => {
+    // The URL spec normalizes dot-segments — including percent-encoded %2e%2e — before we ever
+    // see `pathname`, so this resolves to plain "/package.json" inside PUBLIC_DIR (which doesn't
+    // exist there) rather than escaping to the real server/package.json one level up.
+    const res = await request(app).get("/%2e%2e/package.json");
+    expect(res.status).toBe(404);
+  });
+});
+
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
   // Clean up any leftover test files under DOWNLOADS_DIR from a failed assertion.
   if (fs.existsSync(DOWNLOADS_DIR)) {
     for (const f of fs.readdirSync(DOWNLOADS_DIR)) fs.rmSync(path.join(DOWNLOADS_DIR, f), { force: true });

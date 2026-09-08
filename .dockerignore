@@ -2,10 +2,7 @@
 .idea
 .vscode
 node_modules
-server/node_modules
 app/node_modules
-server/dist
-server/coverage
 app/coverage
 app/.expo
 app/android/build
@@ -14,8 +11,11 @@ app/android/.kotlin
 app/android/.cxx
 downloads
 logs
-server/downloads
-server/logs
+app/server/dist
+app/server/public
+app/server/downloads
+app/server/logs
+app/server/data
 *.log
 .env
 .env.*

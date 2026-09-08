@@ -9,6 +9,24 @@ export interface ChangelogEntry {
 /** Bundled release notes shown in the changelog modal — newest first. Append one entry per release. */
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.12.0",
+    date: "2026-09-08",
+    notes: {
+      de: [
+        "YouTube-Cookies lassen sich jetzt importieren (Einfügen, Hochladen oder Drag-and-Drop einer cookies.txt) für altersbeschränkte oder anmeldepflichtige Videos.",
+        "Download-Fortschritt wird jetzt zusätzlich in der Server-Konsole mitprotokolliert.",
+        "Neu in den Einstellungen: anpassbare animierte Hintergründe (Aero Shards, Ghost Fibers) mit Farb-, Skalierungs- und Geschwindigkeitsreglern, die über Neustarts hinweg gespeichert bleiben.",
+        "Bedienelemente zeigen jetzt Hover-/Press-Feedback und sind für Screenreader zugänglich (korrekte Rollen und ARIA-Status).",
+      ],
+      en: [
+        "YouTube cookies can now be imported (paste, upload, or drag-and-drop a cookies.txt) for age-restricted or login-only videos.",
+        "Download progress is now also mirrored to the server's own console.",
+        "New in Settings: customizable animated backgrounds (Aero Shards, Ghost Fibers) with color/scale/speed controls that persist across restarts.",
+        "Interactive controls now show hover/press feedback and are accessible to screen readers (correct roles and ARIA state).",
+      ],
+    },
+  },
+  {
     version: "1.11.0",
     date: "2026-09-07",
     notes: {

@@ -16,12 +16,18 @@ RUN npm install -g pnpm@11
 
 # Manifests only, so `pnpm install` is cached and doesn't rerun on source edits
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
-COPY server/package.json ./server/package.json
 COPY app/package.json ./app/package.json
 
 # Cache mount so a retry after a network blip resumes instead of
 # redownloading everything; fetch timeouts/retries are set in .npmrc
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
+
+# Baked-in source snapshot so the container has something valid to run from the moment it starts.
+# `docker compose watch`'s `sync` action (see docker-compose.yml) keeps this fresh with live host
+# edits during a dev session — no bind mount, since Docker Desktop doesn't propagate Windows-host
+# bind-mount writes as inotify events Metro/tsx can see. Rebuild the image after pulling changes
+# that didn't come through your own edits (a fresh git pull, a branch switch).
+COPY app ./app
 
 EXPOSE 3001 8082

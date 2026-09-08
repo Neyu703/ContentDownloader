@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { errorMessage } from "../src/utils.js";
+import { errorMessage } from "../../server/utils.js";
 
 describe("errorMessage", () => {
   it("returns the message of a real Error", () => {

@@ -1,12 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { detectPlatform } from "../../src/platforms/registry.js";
-import { Instagram } from "../../src/platforms/Instagram.js";
-import { SoundCloud } from "../../src/platforms/SoundCloud.js";
-import { TikTok } from "../../src/platforms/TikTok.js";
-import { Twitch } from "../../src/platforms/Twitch.js";
-import { Twitter } from "../../src/platforms/Twitter.js";
-import { Vimeo } from "../../src/platforms/Vimeo.js";
-import { YouTube } from "../../src/platforms/YouTube.js";
+import { detectPlatform } from "../../../server/platforms/registry.js";
+import { Instagram } from "../../../server/platforms/Instagram.js";
+import { SoundCloud } from "../../../server/platforms/SoundCloud.js";
+import { TikTok } from "../../../server/platforms/TikTok.js";
+import { Twitch } from "../../../server/platforms/Twitch.js";
+import { Twitter } from "../../../server/platforms/Twitter.js";
+import { Vimeo } from "../../../server/platforms/Vimeo.js";
+import { YouTube } from "../../../server/platforms/YouTube.js";
 
 describe("detectPlatform", () => {
   it("recognizes a standard youtube.com watch URL", () => {
@@ -62,11 +61,11 @@ describe("detectPlatform", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    jest.restoreAllMocks();
   });
 
   it("returns null when a matched platform's checkAvailability() throws", () => {
-    vi.spyOn(YouTube.prototype, "checkAvailability").mockImplementation(() => {
+    jest.spyOn(YouTube.prototype, "checkAvailability").mockImplementation(() => {
       throw new Error("unavailable");
     });
     expect(detectPlatform("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeNull();

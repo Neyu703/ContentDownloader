@@ -1,5 +1,4 @@
-import { describe, expect, it } from "vitest";
-import { normalizeUrl } from "../src/url.js";
+import { normalizeUrl } from "../../server/url.js";
 
 describe("normalizeUrl", () => {
   it("prepends https:// to a schemeless link", () => {

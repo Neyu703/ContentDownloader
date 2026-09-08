@@ -56,6 +56,28 @@ describe("subscribe / notify", () => {
   });
 });
 
+describe("production build (same-origin API base)", () => {
+  it("calls the API with relative paths instead of a hardcoded dev URL", async () => {
+    const devFlag = globalThis as unknown as { __DEV__: boolean };
+    const originalDev = devFlag.__DEV__;
+    devFlag.__DEV__ = false;
+    try {
+      const downloader = freshDownloader();
+      jest
+        .mocked(fetch)
+        .mockResolvedValueOnce(jsonResponse({ service: "content-downloader-server" }))
+        .mockResolvedValueOnce(jsonResponse({ jobId: "job-1" }));
+
+      await downloader.enqueue({ url: "u", format: "audio", quality: "320" });
+
+      expect(fetch).toHaveBeenNthCalledWith(1, "/api/ping", expect.anything());
+      expect(fetch).toHaveBeenNthCalledWith(2, "/api/convert", expect.anything());
+    } finally {
+      devFlag.__DEV__ = originalDev;
+    }
+  });
+});
+
 describe("enqueue", () => {
   it("throws when the server is unreachable", async () => {
     const downloader = freshDownloader();

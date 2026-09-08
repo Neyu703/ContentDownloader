@@ -1,16 +1,17 @@
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { waitFor } from "@testing-library/react-native";
 
-vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
-vi.mock("node:fs", () => ({
+jest.mock("node:child_process", () => ({ spawn: jest.fn() }));
+jest.mock("node:fs", () => ({
+  __esModule: true,
   default: {
-    existsSync: vi.fn(),
+    existsSync: jest.fn(),
   },
 }));
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { updateYtDlp, checkEnvironment, getYtDlpVersion, isFfmpegAvailable } from "../src/environment.js";
+import { updateYtDlp, checkEnvironment, getYtDlpVersion, isFfmpegAvailable } from "../../server/environment.js";
 
 /** A minimal fake ChildProcess: stdout/stderr are EventEmitters, plus its own "error"/"close" events. */
 function createFakeChild() {
@@ -22,7 +23,7 @@ function createFakeChild() {
 
 /** Queues the next spawn() call to return this fake child. */
 function mockNextSpawn(child: ReturnType<typeof createFakeChild>) {
-  vi.mocked(spawn).mockReturnValueOnce(child as never);
+  jest.mocked(spawn).mockReturnValueOnce(child as never);
 }
 
 /** Runs a fake child to completion: emits stdout, then closes with the given exit code. */
@@ -33,16 +34,16 @@ async function resolveSpawn(child: ReturnType<typeof createFakeChild>, stdout: s
 }
 
 beforeEach(() => {
-  vi.mocked(fs.existsSync).mockReturnValue(true);
+  jest.mocked(fs.existsSync).mockReturnValue(true);
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  jest.clearAllMocks();
 });
 
 describe("updateYtDlp", () => {
   it("logs the trimmed output on success", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
     const child = createFakeChild();
     mockNextSpawn(child);
     const promise = updateYtDlp();
@@ -52,7 +53,7 @@ describe("updateYtDlp", () => {
   });
 
   it("warns with the Error message when the update fails with an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const child = createFakeChild();
     mockNextSpawn(child);
     const promise = updateYtDlp();
@@ -63,7 +64,7 @@ describe("updateYtDlp", () => {
   });
 
   it("warns with the raw rejection when it is not an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const child = createFakeChild();
     mockNextSpawn(child);
     const promise = updateYtDlp();
@@ -75,8 +76,8 @@ describe("updateYtDlp", () => {
 
 describe("checkEnvironment", () => {
   it("logs the version, no warnings, when yt-dlp/ffmpeg/PO-token script are all present", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
@@ -94,7 +95,7 @@ describe("checkEnvironment", () => {
   });
 
   it("warns when the yt-dlp version check fails with an Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
@@ -102,7 +103,7 @@ describe("checkEnvironment", () => {
 
     const promise = checkEnvironment();
     versionChild.emit("close", 1);
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
     ffmpegChild.emit("close", 0);
     await promise;
 
@@ -110,7 +111,7 @@ describe("checkEnvironment", () => {
   });
 
   it("warns when the yt-dlp version check fails without a proper Error", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
@@ -118,7 +119,7 @@ describe("checkEnvironment", () => {
 
     const promise = checkEnvironment();
     versionChild.emit("error", "boom" as never);
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(spawn).toHaveBeenCalledTimes(2));
     ffmpegChild.emit("close", 0);
     await promise;
 
@@ -126,7 +127,7 @@ describe("checkEnvironment", () => {
   });
 
   it("warns when ffmpeg is not found (non-zero exit)", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
@@ -142,7 +143,7 @@ describe("checkEnvironment", () => {
   });
 
   it("warns when ffmpeg spawn itself errors", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
@@ -157,8 +158,8 @@ describe("checkEnvironment", () => {
   });
 
   it("warns when the PO-token provider script is missing", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    jest.mocked(fs.existsSync).mockReturnValue(false);
     const versionChild = createFakeChild();
     const ffmpegChild = createFakeChild();
     mockNextSpawn(versionChild);
