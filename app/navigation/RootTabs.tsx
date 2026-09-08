@@ -34,6 +34,11 @@ export function RootTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        // Without an animation, react-navigation leaves the inactive tab's screen fully painted
+        // behind the active one (just z-index'd below) instead of hiding it — with the scene
+        // background made transparent above for BackgroundLayer, that left the previous screen's
+        // content visibly bleeding through wherever the new screen's content didn't fully cover it.
+        animation: "fade",
         tabBarStyle: navigationStyles.tabBar,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
