@@ -8,8 +8,6 @@ export const de = {
     settings: "Einstellungen",
   },
   home: {
-    title: "ContentDownloader",
-    subtitle: "Lädt Videos von YouTube, TikTok, Instagram und mehr als MP3 oder MP4 in der gewünschten Qualität herunter",
     urlPlaceholder: "Link einfügen (YouTube, TikTok, Instagram, ...)",
     pasteAccessibilityLabel: "Einfügen",
     loadingPlaylist: "Lade Playlist…",

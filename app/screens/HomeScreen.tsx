@@ -423,10 +423,7 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.page}>
-      <View style={[styles.card, useTwoColumnLayout && styles.cardWide]}>
-        <Text style={styles.title}>{translate("home.title")}</Text>
-        <Text style={styles.subtitle}>{translate("home.subtitle")}</Text>
-
+      <View style={[styles.card, styles.cardHome, useTwoColumnLayout && styles.cardWide]}>
         {isSetupMessagePhase(setup.phase) && (
           <Text style={[styles.searchMessage, setup.phase === "failed" && styles.errorText]}>
             {translate(setup.message, setup.messageParams)}

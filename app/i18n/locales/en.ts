@@ -7,8 +7,6 @@ export const en: typeof de = {
     settings: "Settings",
   },
   home: {
-    title: "ContentDownloader",
-    subtitle: "Downloads videos from YouTube, TikTok, Instagram and more as MP3 or MP4 in the quality you choose",
     urlPlaceholder: "Paste a link (YouTube, TikTok, Instagram, ...)",
     pasteAccessibilityLabel: "Paste",
     loadingPlaylist: "Loading playlist…",

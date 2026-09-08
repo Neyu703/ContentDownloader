@@ -32,7 +32,7 @@ describe("RootTabs", () => {
         <RootTabs />
       </NavigationContainer>
     );
-    expect(screen.getByText("ContentDownloader")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)")).toBeTruthy();
   });
 
   it("labels the two tabs via i18n", async () => {

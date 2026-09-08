@@ -58,6 +58,12 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
     cardWide: {
       maxWidth: 920,
     },
+    // Home has no header (title/subtitle were removed as visual clutter — see the app-name
+    // rework), so the URL field needs a bit more breathing room above it than the shared card
+    // padding gives Settings' own header, or it reads as flush/cramped against the card edge.
+    cardHome: {
+      paddingTop: 36,
+    },
     twoColumnRow: {
       flexDirection: "row",
       gap: 24,
@@ -84,12 +90,6 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
       color: colors.textPrimary,
       textAlign: "center",
       marginBottom: 6,
-    },
-    subtitle: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      textAlign: "center",
-      marginBottom: 24,
     },
     label: {
       fontSize: 12,
