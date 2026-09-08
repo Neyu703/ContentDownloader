@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { errorMessage } from "./utils.js";
+import { delay, errorMessage, spawnForOutput } from "./utils.js";
 import { runYtDlp } from "./ytdlpProcess.js";
 
 export const DOWNLOADS_DIR = path.join(process.cwd(), "downloads");
@@ -15,13 +15,52 @@ export type VideoQuality = (typeof VIDEO_QUALITIES)[number];
 /** How many playlist entries a platform's fetchPlaylistInfo() lists per call — mirrored by PAGE_SIZE in DownloadQueue.kt. */
 export const PLAYLIST_PAGE_SIZE = 50;
 
+// A transient failure (network blip, a momentarily unreachable PyPI) shouldn't leave the
+// container stuck on a stale build until its next restart, so this retries with a linearly
+// growing delay (5s, 10s, 15s, ... up to ~140s total) before finally giving up and just warning —
+// the next scheduled run (see startPeriodicYtDlpUpdates() below) picks it back up from there.
+export const UPDATE_RETRY_ATTEMPTS = 8;
+const UPDATE_RETRY_DELAY_MS = 5000;
+
 export async function updateYtDlp(): Promise<void> {
+  for (let attempt = 1; attempt <= UPDATE_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const output = await upgradeYtDlpViaPip();
+      console.log(output.trim());
+      return;
+    } catch (err) {
+      if (attempt === UPDATE_RETRY_ATTEMPTS) {
+        console.warn("yt-dlp Selbst-Update fehlgeschlagen:", errorMessage(err));
+        return;
+      }
+      await delay(UPDATE_RETRY_DELAY_MS * attempt);
+    }
+  }
+}
+
+// A one-time update at boot isn't enough to guarantee yt-dlp stays functional: this server can
+// run for days without a restart while YouTube keeps shifting its PO-token/SABR enforcement, so
+// the pinned nightly build drifts stale. Re-running the same update on a fixed interval keeps a
+// long-lived container current without needing a restart. unref()'d so the timer itself never
+// keeps the process alive.
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+export function startPeriodicYtDlpUpdates(): void {
+  setInterval(() => {
+    updateYtDlp().then(checkYtDlpVersion);
+  }, UPDATE_INTERVAL_MS).unref();
+}
+
+// yt-dlp's own `--update-to` self-updater refuses to run against a pip-managed install (its
+// is_non_updateable() check just tells you to use pip instead), so keeping pace with YouTube's
+// frequently-changing PO-token/SABR enforcement — only handled in pre-release builds, not yet in
+// stable — has to go through pip instead. Same install command and --break-system-packages
+// fallback as the initial install (Dockerfile / session-start.sh), just with --upgrade added.
+async function upgradeYtDlpViaPip(): Promise<string> {
   try {
-    // Pinned to nightly: YouTube's current PO-token/SABR enforcement is only handled there, not yet in stable.
-    const output = await runYtDlp(["--update-to", "nightly"]);
-    console.log(output.trim());
-  } catch (err) {
-    console.warn("yt-dlp Selbst-Update fehlgeschlagen:", errorMessage(err));
+    return await spawnForOutput("pip3", ["install", "--user", "--upgrade", "--pre", "yt-dlp"]);
+  } catch {
+    return await spawnForOutput("pip3", ["install", "--user", "--upgrade", "--pre", "--break-system-packages", "yt-dlp"]);
   }
 }
 

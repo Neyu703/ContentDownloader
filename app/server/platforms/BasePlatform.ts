@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { errorMessage, isHttpOrHttps } from "../utils.js";
+import { delay, errorMessage, isHttpOrHttps } from "../utils.js";
 import { cookiesArgs } from "../cookies.js";
 import { DownloadLogger } from "../downloadLog.js";
 import { DOWNLOADS_DIR, getYtDlpVersion, isFfmpegAvailable } from "../environment.js";
@@ -13,10 +13,6 @@ import type { ConvertResult, MediaFormat, Platform, UserFacingError, VideoInfo }
 /** Total download attempts per job (including the first try) before a transient failure gives up. */
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 2000;
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Generic yt-dlp behavior shared by every platform: metadata lookup, format-arg selection, and a

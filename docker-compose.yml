@@ -34,6 +34,12 @@ services:
       - EXPO_NO_TELEMETRY=1
       - CHOKIDAR_USEPOLLING=1
       - CHOKIDAR_INTERVAL=300
+      # This container has no display and Expo's own headless check (envIsHeadless()) skips the
+      # standalone React Native DevTools shell prep when set — without it, Metro eagerly tries to
+      # install/launch that Electron-based shell on every startup and fails: the debugger-shell
+      # binary needs a GTK3/NSS/ATK stack (libnspr4.so etc.) that isn't installed in this image,
+      # and even if it were, there's nowhere here to display its window anyway.
+      - EXPO_UNSTABLE_HEADLESS=1
     volumes:
       - app_node_modules:/app/app/node_modules
       # Metro's transform cache defaults to $TMPDIR/metro-cache; a named volume keeps it warm
