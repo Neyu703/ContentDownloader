@@ -2,7 +2,7 @@
   "expo": {
     "name": "Content Downloader",
     "slug": "content-downloader",
-    "version": "1.12.3",
+    "version": "1.12.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.contentdownloader.app",
-      "versionCode": 50,
+      "versionCode": 51,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -50,8 +50,7 @@
     "extra": {
       "eas": {
         "projectId": "88134826-f760-4889-8f71-090b31578be5"
-      },
-      "debugLogEmail": "REDACTED@example.com"
+      }
     }
   }
 }

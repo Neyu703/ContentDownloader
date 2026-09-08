@@ -51,6 +51,11 @@ yarn-error.*
 # Claude / agent local config (never commit)
 .claude/settings.local.json
 
+# local Windows dev launcher scripts (contain machine-specific paths)
+/deploy.vbs
+app/run-hidden.vbs
+app/server-run-hidden.vbs
+
 # IDE
 .idea/
 .vscode/
