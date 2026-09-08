@@ -45,6 +45,11 @@ jest.mock("./changelog/lastSeenVersion", () => ({
   checkForVersionUpdate: jest.fn(),
 }));
 
+// App -> BackgroundLayer would otherwise pull in the platform-resolved registry (empty under
+// Jest's default native resolution anyway, but mocked explicitly here to keep this test's
+// dependency surface obvious and independent of that resolution detail).
+jest.mock("./backgrounds/registry", () => ({ backgroundRegistry: [] }));
+
 // App -> RootTabs -> HomeScreen would otherwise pull in the real (native/web) downloader module.
 jest.mock("./downloader", () => ({
   downloader: {

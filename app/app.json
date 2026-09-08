@@ -2,7 +2,7 @@
   "expo": {
     "name": "Content Downloader",
     "slug": "content-downloader",
-    "version": "1.11.3",
+    "version": "1.11.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.contentdownloader.app",
-      "versionCode": 43,
+      "versionCode": 44,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

@@ -9,6 +9,8 @@ import { checkForVersionUpdate } from "./changelog/lastSeenVersion";
 import { ChangelogModal } from "./components/ChangelogModal";
 import { RootTabs } from "./navigation/RootTabs";
 import { ThemeProvider } from "./theme/ThemeContext";
+import { BackgroundProvider } from "./backgrounds/BackgroundContext";
+import { BackgroundLayer } from "./components/BackgroundLayer";
 
 export default function App() {
   const [isI18nReady, setIsI18nReady] = useState(false);
@@ -31,12 +33,15 @@ export default function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
-        <SafeAreaProvider>
-          <NavigationContainer>
-            <RootTabs />
-          </NavigationContainer>
-          <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
-        </SafeAreaProvider>
+        <BackgroundProvider>
+          <SafeAreaProvider>
+            <BackgroundLayer />
+            <NavigationContainer>
+              <RootTabs />
+            </NavigationContainer>
+            <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
+          </SafeAreaProvider>
+        </BackgroundProvider>
       </ThemeProvider>
     </I18nextProvider>
   );

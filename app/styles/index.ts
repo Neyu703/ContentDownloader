@@ -7,15 +7,17 @@ import { makeJobCardStyles } from "./jobCard";
 import { makePlaylistStyles } from "./playlist";
 import { makeChangelogStyles } from "./changelog";
 import { makeCookieImportStyles } from "./cookieImport";
+import { makeBackgroundStyles } from "./background";
 
-export function makeStyles(colors: ThemeColors) {
+export function makeStyles(colors: ThemeColors, isBackgroundActive: boolean = false) {
   return StyleSheet.create({
-    ...makeLayoutStyles(colors),
+    ...makeLayoutStyles(colors, isBackgroundActive),
     ...makeFormStyles(colors),
     ...makeDropdownStyles(colors),
     ...makeJobCardStyles(colors),
     ...makePlaylistStyles(colors),
     ...makeChangelogStyles(colors),
     ...makeCookieImportStyles(colors),
+    ...makeBackgroundStyles(colors),
   });
 }

@@ -16,13 +16,15 @@
     "expo-sharing": "~57.0.13",
     "expo-status-bar": "~57.0.1",
     "i18next": "^26.4.1",
+    "ogl": "1.0.11",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^17.0.13",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.2",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "vgpu": "0.3.1"
   },
   "devDependencies": {
     "@react-native/jest-preset": "0.86.2",
@@ -44,6 +46,14 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "moduleNameMapper": {
+      "\\.css$": "<rootDir>/jest.cssMock.js"
+    },
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|vgpu|@vgpu|webgpu|@webgpu|wgpu-matrix))",
+      "/node_modules/react-native-reanimated/plugin/",
+      "/node_modules/@react-native/babel-preset/"
+    ],
     "collectCoverage": true,
     "collectCoverageFrom": [
       "**/*.{ts,tsx}",
@@ -52,6 +62,8 @@
       "!index.ts",
       "!jest-globals.d.ts",
       "!modules/ytdlp/android/**",
+      "!backgrounds/aeroShards/AeroShards.tsx",
+      "!backgrounds/ghostFibers/GhostFibers.tsx",
       "!.expo/**"
     ],
     "coverageThreshold": {

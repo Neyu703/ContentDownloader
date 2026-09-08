@@ -24,14 +24,20 @@ export function modalCard(colors: ThemeColors) {
   } as const;
 }
 
-export function makeLayoutStyles(colors: ThemeColors) {
+export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolean) {
   return {
     page: {
       flex: 1,
-      backgroundColor: colors.background,
+      // Transparent when an animated background is active, so BackgroundLayer (mounted behind the
+      // nav stack in App.tsx) shows through instead of being hidden by this screen's own backdrop.
+      backgroundColor: isBackgroundActive ? "transparent" : colors.background,
       alignItems: "center",
       justifyContent: "center",
       padding: 24,
+      // web-only: an active background reacts to click-and-drag anywhere on screen, which would
+      // otherwise drag-select whatever's underneath the cursor over the empty margin around card.
+      // card explicitly opts back into selection below, so its own text is unaffected.
+      userSelect: isBackgroundActive && Platform.OS === "web" ? ("none" as const) : undefined,
     },
     card: {
       width: "100%",
@@ -46,6 +52,8 @@ export function makeLayoutStyles(colors: ThemeColors) {
       // the one scrollable region. NOT on native — jobList isn't flex:1 there (see its own comment),
       // so clipping here would just hide overflowing content with nothing able to scroll to it.
       overflow: Platform.select({ web: "hidden" as const, default: "visible" as const }),
+      // web-only: opts back into normal text selection, overriding page's userSelect:none above.
+      userSelect: Platform.OS === "web" ? ("text" as const) : undefined,
     },
     cardWide: {
       maxWidth: 920,

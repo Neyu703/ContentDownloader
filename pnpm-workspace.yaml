@@ -3,6 +3,8 @@ packages:
   - "server"
 allowBuilds:
   '@parcel/watcher': true
+  '@vgpu/adapter-node': false
   esbuild: true
   unrs-resolver: true
+  webgpu: false
 nodeLinker: hoisted

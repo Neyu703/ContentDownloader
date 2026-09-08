@@ -27,6 +27,22 @@ jest.mock("../downloader", () => ({
   },
 }));
 
+// Toggleable like mockDownloader — empty by default (matches the real native registry), tests
+// that need the entry visible push a fake entry onto it.
+let mockBackgroundRegistry: { id: string; labelKey: string }[] = [];
+jest.mock("../backgrounds/registry", () => ({
+  get backgroundRegistry() {
+    return mockBackgroundRegistry;
+  },
+}));
+jest.mock("../components/BackgroundSettingsModal", () => {
+  const { Text } = require("react-native");
+  return {
+    BackgroundSettingsModal: ({ visible, onClose }: { visible: boolean; onClose: () => void }) =>
+      visible ? <Text onPress={onClose}>background-settings-modal</Text> : null,
+  };
+});
+
 function makeDownloaderWithFolderPicker(overrides: Record<string, jest.Mock> = {}) {
   return {
     getDownloadsFolderName: jest.fn().mockResolvedValue(null),
@@ -48,6 +64,7 @@ function renderSettings() {
 beforeEach(async () => {
   await AsyncStorage.clear();
   mockDownloader = {};
+  mockBackgroundRegistry = [];
 });
 
 afterEach(async () => {
@@ -220,5 +237,25 @@ describe("SettingsScreen", () => {
     await fireEvent.press(screen.getByText("Schließen"));
 
     expect(screen.queryByText("Keine Cookies hinterlegt")).toBeNull();
+  });
+
+  it("hides the background settings entry when the registry is empty (native)", async () => {
+    await renderSettings();
+    expect(screen.queryByText("Hintergrund")).toBeNull();
+  });
+
+  it("opens and closes the background settings modal when the registry has an entry (web)", async () => {
+    mockBackgroundRegistry = [{ id: "aeroShards", labelKey: "background.aeroShardsName" }];
+    await renderSettings();
+    expect(screen.getByText("Hintergrund")).toBeTruthy();
+    expect(screen.queryByText("background-settings-modal")).toBeNull();
+
+    await fireEvent.press(screen.getByText("Hintergrund"));
+
+    expect(screen.getByText("background-settings-modal")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("background-settings-modal"));
+
+    expect(screen.queryByText("background-settings-modal")).toBeNull();
   });
 });

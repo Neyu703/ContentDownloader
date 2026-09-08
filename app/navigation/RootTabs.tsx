@@ -5,6 +5,7 @@ import { HomeScreen } from "../screens/HomeScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { makeNavigationStyles } from "../styles/navigation";
 import { useTheme } from "../theme/ThemeContext";
+import { useBackground } from "../backgrounds/BackgroundContext";
 import type { RootTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -18,7 +19,8 @@ function TabBarIcon({ symbol, color, size }: { symbol: string; color: string; si
 export function RootTabs() {
   const { t: translate } = useTranslation();
   const { colors } = useTheme();
-  const navigationStyles = makeNavigationStyles(colors);
+  const { isActive: isBackgroundActive } = useBackground();
+  const navigationStyles = makeNavigationStyles(colors, isBackgroundActive);
 
   return (
     <Tab.Navigator
@@ -27,6 +29,7 @@ export function RootTabs() {
         tabBarStyle: navigationStyles.tabBar,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
+        sceneStyle: navigationStyles.sceneContainer,
       }}
     >
       <Tab.Screen
