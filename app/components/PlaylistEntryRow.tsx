@@ -2,6 +2,7 @@ import { Image, Pressable, Text, View } from "react-native";
 import type { PlaylistEntry } from "../downloader/types";
 import { formatDuration, hasPositiveDuration } from "../lib/format";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 
 export function PlaylistEntryRow({
   entry,
@@ -14,7 +15,12 @@ export function PlaylistEntryRow({
 }) {
   const styles = useStyles();
   return (
-    <Pressable style={styles.playlistEntryRow} onPress={onToggle}>
+    <Pressable
+      style={withFeedback(styles, styles.playlistEntryRow)}
+      onPress={onToggle}
+      accessibilityRole="checkbox"
+      aria-checked={checked}
+    >
       <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
         {checked && <Text style={styles.checkboxMark}>✓</Text>}
       </View>

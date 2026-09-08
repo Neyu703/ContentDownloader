@@ -13,6 +13,7 @@ import {
   isFinishedPhase,
 } from "../lib/format";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 
 // No fresh line from yt-dlp for this long: the job is still alive, YouTube is just slow to answer.
 const STALL_HINT_MS = 20_000;
@@ -117,9 +118,11 @@ export function JobCard({
         <>
           {hasDebugInfo ? (
             <Pressable
-              style={styles.statusRow}
+              style={withFeedback(styles, styles.statusRow)}
               onPress={() => setIsDetailsExpanded((expanded) => !expanded)}
               accessibilityLabel={isDetailsExpanded ? translate("jobCard.detailsCollapse") : translate("jobCard.detailsExpand")}
+              accessibilityRole="button"
+              aria-expanded={isDetailsExpanded}
             >
               {statusLabel}
               <View style={styles.collapseButton}>
@@ -201,21 +204,22 @@ export function JobCard({
 
       <View style={styles.jobActions}>
         {!isFinished && (
-          <Pressable style={styles.secondaryButton} onPress={onCancel}>
+          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={onCancel} accessibilityRole="button">
             <Text style={styles.buttonText}>{translate("jobCard.cancel")}</Text>
           </Pressable>
         )}
         {job.phase === "error" && (
-          <Pressable style={styles.secondaryButton} onPress={onRetry}>
+          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={onRetry} accessibilityRole="button">
             <Text style={styles.buttonText}>{translate("jobCard.tryAgain")}</Text>
           </Pressable>
         )}
         {job.phase === "done" && onSave && (
           <>
             <Pressable
-              style={[styles.downloadButton, saveState === "saving" && styles.buttonDisabled]}
+              style={withFeedback(styles, [styles.downloadButton, saveState === "saving" && styles.buttonDisabled])}
               onPress={handleSavePress}
               disabled={saveState === "saving"}
+              accessibilityRole="button"
             >
               <Text style={styles.downloadButtonText}>
                 {saveState === "saving"
@@ -226,9 +230,10 @@ export function JobCard({
               </Text>
             </Pressable>
             <Pressable
-              style={styles.secondaryButton}
+              style={withFeedback(styles, styles.secondaryButton)}
               onPress={() => onShare(customName ?? undefined)}
               disabled={isSharing}
+              accessibilityRole="button"
             >
               <Text style={styles.buttonText}>{isSharing ? translate("jobCard.sharingEllipsis") : translate("jobCard.share")}</Text>
             </Pressable>
@@ -236,9 +241,10 @@ export function JobCard({
         )}
         {job.phase === "done" && !onSave && (
           <Pressable
-            style={[styles.downloadButton, isSharing && styles.buttonDisabled]}
+            style={withFeedback(styles, [styles.downloadButton, isSharing && styles.buttonDisabled])}
             onPress={() => onShare(customName ?? undefined)}
             disabled={isSharing}
+            accessibilityRole="button"
           >
             <Text style={styles.downloadButtonText}>
               {isSharing ? translate("jobCard.downloadingEllipsis") : translate("jobCard.downloadExt", { ext: extLabel })}

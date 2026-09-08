@@ -22,7 +22,7 @@ export function OverlayModal({
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable testID="dropdown-overlay" style={styles.dropdownOverlay} onPress={onClose}>
+      <Pressable testID="dropdown-overlay" style={styles.dropdownOverlay} onPress={onClose} accessibilityRole="none">
         {children}
       </Pressable>
     </Modal>

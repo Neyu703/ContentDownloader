@@ -12,6 +12,7 @@ import { loadLanguageSetting, resolveLanguage, saveLanguageSetting, type Languag
 import { useTheme } from "../theme/ThemeContext";
 import type { ThemeSetting } from "../theme/themePreference";
 import { useStyles } from "../styles/useStyles";
+import { withActiveTint } from "../styles/interactive";
 
 const LANGUAGE_NAMES: Record<SupportedLanguage, string> = {
   de: "Deutsch",
@@ -22,9 +23,10 @@ function SettingsActionButton({ label, onPress, disabled }: { label: string; onP
   const styles = useStyles();
   return (
     <Pressable
-      style={({ pressed }) => [styles.settingsAction, pressed && styles.settingsActionPressed]}
+      style={withActiveTint(styles.settingsAction, styles.settingsActionPressed)}
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
     >
       <Text style={styles.settingsActionText}>{label}</Text>
       <Text style={styles.settingsActionChevron}>›</Text>

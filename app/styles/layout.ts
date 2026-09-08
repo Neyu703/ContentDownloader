@@ -163,5 +163,16 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
     flushTop: {
       marginTop: 0,
     },
+    // Generic hover/press feedback for Pressables whose surrounding color varies (paste icon,
+    // links, secondary/download buttons, dropdown rows, playlist controls, modal actions) — opacity
+    // dimming reads consistently regardless of the underlying background. See withFeedback() in
+    // interactive.ts. Order matters when both apply: pressed must come after hovered in the style
+    // array so it overrides hovered's opacity instead of the two competing.
+    interactiveHovered: {
+      opacity: 0.85,
+    },
+    interactivePressed: {
+      opacity: 0.65,
+    },
   } as const;
 }

@@ -2,6 +2,7 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { CHANGELOG_ENTRIES, type ChangelogEntry } from "../changelog/entries";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 import { OverlayModal } from "./OverlayModal";
 
 export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -11,7 +12,7 @@ export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose
 
   return (
     <OverlayModal visible={visible} onClose={onClose}>
-      <Pressable style={styles.changelogModal} onPress={() => {}}>
+      <Pressable style={styles.changelogModal} onPress={() => {}} accessibilityRole="none">
         <Text style={styles.changelogTitle}>{translate("changelog.title")}</Text>
         <FlatList
           testID="changelog-entry-list"
@@ -31,7 +32,7 @@ export function ChangelogModal({ visible, onClose }: { visible: boolean; onClose
             </View>
           )}
         />
-        <Pressable style={styles.button} onPress={onClose}>
+        <Pressable style={withFeedback(styles, styles.button)} onPress={onClose} accessibilityRole="button">
           <Text style={styles.buttonText}>{translate("changelog.close")}</Text>
         </Pressable>
       </Pressable>

@@ -6,6 +6,7 @@ import { NONE_BACKGROUND_ID } from "../backgrounds/backgroundPreference";
 import { Dropdown } from "./Dropdown";
 import { OverlayModal } from "./OverlayModal";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 
 export function BackgroundSettingsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const styles = useStyles();
@@ -25,13 +26,17 @@ export function BackgroundSettingsModal({ visible, onClose }: { visible: boolean
 
   return (
     <OverlayModal visible={visible} onClose={onClose}>
-      <Pressable style={styles.backgroundSettingsModal} onPress={() => {}}>
+      <Pressable style={styles.backgroundSettingsModal} onPress={() => {}} accessibilityRole="none">
         <Text style={styles.backgroundSettingsTitle}>{translate("background.title")}</Text>
         <Dropdown options={options} value={backgroundId} onChange={handleSelect} />
         {definition && (
           <definition.ParamsPanel params={params} onChange={(nextParams) => setBackground(backgroundId, nextParams)} />
         )}
-        <Pressable style={[styles.linkButton, styles.flushTop]} onPress={onClose}>
+        <Pressable
+          style={withFeedback(styles, [styles.linkButton, styles.flushTop])}
+          onPress={onClose}
+          accessibilityRole="button"
+        >
           <Text style={styles.linkText}>{translate("background.closeButton")}</Text>
         </Pressable>
       </Pressable>

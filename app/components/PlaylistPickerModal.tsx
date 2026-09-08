@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { MediaFormat, PlaylistInfo } from "../downloader/types";
 import { isAllPlaylistEntriesSelected, playlistConfirmLabel } from "../lib/format";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 import { OverlayModal } from "./OverlayModal";
 import { PlaylistEntryRow } from "./PlaylistEntryRow";
 
@@ -45,7 +46,7 @@ export function PlaylistPickerModal({
           {picker.info.title}
           {picker.info.totalCount != null ? ` (${picker.info.totalCount})` : ""}
         </Text>
-        <Pressable style={styles.linkButton} onPress={onToggleAll}>
+        <Pressable style={withFeedback(styles, styles.linkButton)} onPress={onToggleAll} accessibilityRole="button">
           <Text style={styles.linkText}>{allSelected ? translate("playlist.deselectAll") : translate("playlist.selectAll")}</Text>
         </Pressable>
         {/* FlatList virtualizes rows (only mounts what's on screen) so playlists with thousands of
@@ -72,13 +73,14 @@ export function PlaylistPickerModal({
           }
         />
         <View style={styles.jobActions}>
-          <Pressable style={styles.secondaryButton} onPress={onCancel}>
+          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={onCancel} accessibilityRole="button">
             <Text style={styles.buttonText}>{translate("playlist.cancel")}</Text>
           </Pressable>
           <Pressable
-            style={[styles.button, picker.selected.size === 0 && styles.buttonDisabled]}
+            style={withFeedback(styles, [styles.button, picker.selected.size === 0 && styles.buttonDisabled])}
             onPress={onConfirm}
             disabled={picker.selected.size === 0}
+            accessibilityRole="button"
           >
             <Text style={styles.buttonText}>{playlistConfirmLabel(translate, format, picker.selected.size)}</Text>
           </Pressable>

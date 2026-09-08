@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { downloader } from "../downloader";
 import { looksLikeNetscapeCookiesFile } from "../lib/cookies";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 import { OverlayModal } from "./OverlayModal";
 
 type CookiesStatus = { present: boolean; updatedAt: string | null };
@@ -127,7 +128,7 @@ export function CookieImportModal({ visible, onClose }: { visible: boolean; onCl
 
   return (
     <OverlayModal visible={visible} onClose={onClose}>
-      <Pressable style={styles.cookieImportModal} onPress={() => {}}>
+      <Pressable style={styles.cookieImportModal} onPress={() => {}} accessibilityRole="none">
         <Text style={styles.cookieImportTitle}>{translate("cookieImport.title")}</Text>
         {steps.map((step, index) => (
           <View key={index}>
@@ -136,10 +137,18 @@ export function CookieImportModal({ visible, onClose }: { visible: boolean; onCl
             </Text>
             {index === 0 && (
               <View style={styles.cookieImportLinksRow}>
-                <Pressable onPress={() => Linking.openURL(CHROME_EXTENSION_URL)}>
+                <Pressable
+                  style={withFeedback(styles, undefined)}
+                  onPress={() => Linking.openURL(CHROME_EXTENSION_URL)}
+                  accessibilityRole="link"
+                >
                   <Text style={styles.linkText}>{translate("cookieImport.chromeLink")}</Text>
                 </Pressable>
-                <Pressable onPress={() => Linking.openURL(FIREFOX_EXTENSION_URL)}>
+                <Pressable
+                  style={withFeedback(styles, undefined)}
+                  onPress={() => Linking.openURL(FIREFOX_EXTENSION_URL)}
+                  accessibilityRole="link"
+                >
                   <Text style={styles.linkText}>{translate("cookieImport.firefoxLink")}</Text>
                 </Pressable>
               </View>
@@ -155,7 +164,7 @@ export function CookieImportModal({ visible, onClose }: { visible: boolean; onCl
           <Text style={styles.cookieImportDropIcon}>📤</Text>
           <Text style={styles.cookieImportDropHint}>{translate("cookieImport.dropHint")}</Text>
           <Text style={styles.cookieImportDropOr}>{translate("cookieImport.dropOr")}</Text>
-          <Pressable style={styles.secondaryButton} onPress={handlePickFile}>
+          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={handlePickFile} accessibilityRole="button">
             <Text style={styles.buttonText}>{translate("cookieImport.pickFileButton")}</Text>
           </Pressable>
         </View>
@@ -168,7 +177,12 @@ export function CookieImportModal({ visible, onClose }: { visible: boolean; onCl
             onChangeText={setCookiesText}
             multiline
           />
-          <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel={translate("cookieImport.pasteHint")}>
+          <Pressable
+            style={withFeedback(styles, styles.pasteButton)}
+            onPress={handlePaste}
+            accessibilityLabel={translate("cookieImport.pasteHint")}
+            accessibilityRole="button"
+          >
             <Text style={styles.pasteButtonIcon}>📋</Text>
           </Pressable>
         </View>
@@ -181,15 +195,28 @@ export function CookieImportModal({ visible, onClose }: { visible: boolean; onCl
         </Text>
         {successMessage && <Text style={styles.cookieImportSuccessText}>{successMessage}</Text>}
         {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-        <Pressable style={styles.button} onPress={handleSave} disabled={isSaving}>
+        <Pressable
+          style={withFeedback(styles, styles.button)}
+          onPress={handleSave}
+          disabled={isSaving}
+          accessibilityRole="button"
+        >
           <Text style={styles.buttonText}>{translate("cookieImport.saveButton")}</Text>
         </Pressable>
         {status?.present && (
-          <Pressable style={[styles.linkButton, styles.flushTop]} onPress={handleClear}>
+          <Pressable
+            style={withFeedback(styles, [styles.linkButton, styles.flushTop])}
+            onPress={handleClear}
+            accessibilityRole="button"
+          >
             <Text style={styles.linkText}>{translate("settings.cookieImportClearButton")}</Text>
           </Pressable>
         )}
-        <Pressable style={[styles.linkButton, styles.flushTop]} onPress={onClose}>
+        <Pressable
+          style={withFeedback(styles, [styles.linkButton, styles.flushTop])}
+          onPress={onClose}
+          accessibilityRole="button"
+        >
           <Text style={styles.linkText}>{translate("cookieImport.closeButton")}</Text>
         </Pressable>
       </Pressable>

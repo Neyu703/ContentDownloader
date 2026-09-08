@@ -1,4 +1,5 @@
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createBottomTabNavigator, type BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
 import { useTranslation } from "react-i18next";
 import { Text } from "react-native";
 import { HomeScreen } from "../screens/HomeScreen";
@@ -22,6 +23,13 @@ export function RootTabs() {
   const { isActive: isBackgroundActive } = useBackground();
   const navigationStyles = makeNavigationStyles(colors, isBackgroundActive);
 
+  // React Navigation's default (non-Material) tab bar button renders with pressOpacity=1 and no
+  // hoverEffect (see @react-navigation/bottom-tabs's BottomTabItem), so it has zero visual feedback
+  // on press or hover — this restores both without switching the whole tab bar to the Material variant.
+  function renderTabBarButton(props: BottomTabBarButtonProps) {
+    return <PlatformPressable {...props} pressOpacity={0.6} hoverEffect={{ color: colors.accent }} />;
+  }
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -29,6 +37,7 @@ export function RootTabs() {
         tabBarStyle: navigationStyles.tabBar,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarButton: renderTabBarButton,
         sceneStyle: navigationStyles.sceneContainer,
       }}
     >

@@ -39,6 +39,7 @@ import {
   toFileUri,
 } from "../lib/format";
 import { useStyles } from "../styles/useStyles";
+import { withFeedback } from "../styles/interactive";
 import { useTheme } from "../theme/ThemeContext";
 
 // Above this window width (tablet landscape / desktop), form and job list switch from stacked to side-by-side.
@@ -305,7 +306,12 @@ export function HomeScreen() {
           autoCorrect={false}
           multiline
         />
-        <Pressable style={styles.pasteButton} onPress={handlePaste} accessibilityLabel={translate("home.pasteAccessibilityLabel")}>
+        <Pressable
+          style={withFeedback(styles, styles.pasteButton)}
+          onPress={handlePaste}
+          accessibilityLabel={translate("home.pasteAccessibilityLabel")}
+          accessibilityRole="button"
+        >
           <Text style={styles.pasteButtonIcon}>📋</Text>
         </Pressable>
       </View>
@@ -340,9 +346,10 @@ export function HomeScreen() {
       </View>
 
       <Pressable
-        style={[styles.button, isFormBusy && styles.buttonDisabled]}
+        style={withFeedback(styles, [styles.button, isFormBusy && styles.buttonDisabled])}
         onPress={handleConvert}
         disabled={isFormBusy}
+        accessibilityRole="button"
       >
         <Text style={styles.buttonText}>
           {isPlaylistLoading
@@ -399,8 +406,9 @@ export function HomeScreen() {
     <>
       {hasFinishedJob && (
         <Pressable
-          style={[styles.linkButton, useTwoColumnLayout && styles.flushTop]}
+          style={withFeedback(styles, [styles.linkButton, useTwoColumnLayout && styles.flushTop])}
           onPress={() => downloader.clearFinished()}
+          accessibilityRole="button"
         >
           <Text style={styles.linkText}>{translate("home.clearFinished")}</Text>
         </Pressable>
@@ -426,7 +434,12 @@ export function HomeScreen() {
         )}
 
         {downloader.getDebugLogFileUri && (
-          <Pressable style={styles.linkButton} onPress={sendLog} disabled={isSendingLog}>
+          <Pressable
+            style={withFeedback(styles, styles.linkButton)}
+            onPress={sendLog}
+            disabled={isSendingLog}
+            accessibilityRole="button"
+          >
             <Text style={styles.linkText}>{isSendingLog ? translate("home.debugLogPreparing") : translate("home.debugLogSend")}</Text>
           </Pressable>
         )}
