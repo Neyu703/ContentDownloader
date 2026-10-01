@@ -192,10 +192,8 @@ export function HomeScreen() {
 
   const { shareIntent, resetShareIntent } = useShareIntent();
 
-  // A link shared in from another app (e.g. YouTube's "Share" menu, Android only — the hook
-  // no-ops on web): only filled into the field, never auto-started — the activity is exported, so
-  // any installed app can fire this intent, and a download must stay an explicit user action. The
-  // validation banner then shows whether the link is supported.
+  // A link shared in from another app (Android only; the hook no-ops on web): prefilled, never
+  // auto-started — the activity is exported, so any installed app can fire this intent.
   useEffect(() => {
     if (!shareIntent.webUrl) return;
     setUrl(shareIntent.webUrl);

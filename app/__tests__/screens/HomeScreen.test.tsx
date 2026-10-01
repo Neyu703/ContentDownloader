@@ -78,6 +78,8 @@ function makeJob(overrides: Partial<JobState> = {}): JobState {
   };
 }
 
+const URL_PLACEHOLDER = "Link einfügen (YouTube, TikTok, Instagram, ...)";
+
 /** Sets what expo-share-intent's hook reports for the next render; defaults to "nothing shared". */
 function mockShareIntent(webUrl: string | null = null) {
   const resetShareIntent = jest.fn();
@@ -1112,7 +1114,6 @@ describe("live URL validation banner", () => {
 });
 
 describe("URL field keyboard and focus", () => {
-  const URL_PLACEHOLDER = "Link einfügen (YouTube, TikTok, Instagram, ...)";
 
   async function pressKey(key: string, shiftKey = false) {
     const preventDefault = jest.fn();
@@ -1185,14 +1186,12 @@ describe("share-intent prefill", () => {
     ["a supported playlist link", "https://youtube.com/playlist?list=PL1"],
     ["an unsupported link", "https://example.com/unsupported"],
   ])("only fills the url field for %s, without starting anything", async (_description, sharedUrl) => {
-    const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo());
-    mockDownloader = makeDownloader({ getPlaylistInfo });
     const resetShareIntent = mockShareIntent(sharedUrl);
     await render(<HomeScreen />);
     await waitFor(() => expect(resetShareIntent).toHaveBeenCalled());
-    expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe(sharedUrl);
+    expect(screen.getByPlaceholderText(URL_PLACEHOLDER).props.value).toBe(sharedUrl);
     expect(mockDownloader.enqueue).not.toHaveBeenCalled();
-    expect(getPlaylistInfo).not.toHaveBeenCalled();
+    expect(mockDownloader.getPlaylistInfo).not.toHaveBeenCalled();
   });
 });
 
