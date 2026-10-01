@@ -193,19 +193,13 @@ export function HomeScreen() {
   const { shareIntent, resetShareIntent } = useShareIntent();
 
   // A link shared in from another app (e.g. YouTube's "Share" menu, Android only — the hook
-  // no-ops on web): auto-starts the download if the platform is recognized, exactly like a
-  // manually pasted single-line URL would (handleSingleConvert already branches on playlist vs.
-  // single video). An unsupported link is only filled into the field, letting the validation
-  // banner above explain why nothing started.
+  // no-ops on web): only filled into the field, never auto-started — the activity is exported, so
+  // any installed app can fire this intent, and a download must stay an explicit user action. The
+  // validation banner then shows whether the link is supported.
   useEffect(() => {
     if (!shareIntent.webUrl) return;
-    const sharedUrl = shareIntent.webUrl;
+    setUrl(shareIntent.webUrl);
     resetShareIntent();
-    if (detectPlatformId(sharedUrl)) {
-      handleSingleConvert(sharedUrl);
-    } else {
-      setUrl(sharedUrl);
-    }
   }, [shareIntent]);
 
   // Starts the form with whatever format/quality the user picked last time, instead of always

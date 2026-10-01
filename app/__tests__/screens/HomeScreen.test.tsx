@@ -1173,38 +1173,26 @@ describe("URL field keyboard and focus", () => {
   });
 });
 
-describe("share-intent auto-start", () => {
+describe("share-intent prefill", () => {
   it("does nothing when there is no pending share", async () => {
     mockShareIntent(null);
     await render(<HomeScreen />);
     expect(mockDownloader.enqueue).not.toHaveBeenCalled();
   });
 
-  it("auto-starts a supported single-video link and resets the share intent", async () => {
-    const resetShareIntent = mockShareIntent("https://youtu.be/shared");
-    await render(<HomeScreen />);
-    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalled());
-    expect(mockDownloader.enqueue).toHaveBeenCalledWith(expect.objectContaining({ url: "https://youtu.be/shared" }));
-    expect(resetShareIntent).toHaveBeenCalled();
-  });
-
-  it("routes a supported playlist link through the playlist picker instead of auto-starting", async () => {
+  it.each([
+    ["a supported single-video link", "https://youtu.be/shared"],
+    ["a supported playlist link", "https://youtube.com/playlist?list=PL1"],
+    ["an unsupported link", "https://example.com/unsupported"],
+  ])("only fills the url field for %s, without starting anything", async (_description, sharedUrl) => {
     const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo());
     mockDownloader = makeDownloader({ getPlaylistInfo });
-    mockShareIntent("https://youtube.com/playlist?list=PL1");
-    await render(<HomeScreen />);
-    await waitFor(() => expect(getPlaylistInfo).toHaveBeenCalledWith("https://youtube.com/playlist?list=PL1", 1));
-    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
-  });
-
-  it("fills the url field without starting a job for an unsupported shared link", async () => {
-    const resetShareIntent = mockShareIntent("https://example.com/unsupported");
+    const resetShareIntent = mockShareIntent(sharedUrl);
     await render(<HomeScreen />);
     await waitFor(() => expect(resetShareIntent).toHaveBeenCalled());
-    expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe(
-      "https://example.com/unsupported"
-    );
+    expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe(sharedUrl);
     expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+    expect(getPlaylistInfo).not.toHaveBeenCalled();
   });
 });
 

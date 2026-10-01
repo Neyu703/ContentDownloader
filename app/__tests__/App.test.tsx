@@ -65,7 +65,7 @@ jest.mock("../downloader", () => ({
   },
 }));
 
-// HomeScreen's share-intent auto-start: no share pending in these App-level tests.
+// HomeScreen's share-intent prefill: no share pending in these App-level tests.
 jest.mock("expo-share-intent", () => ({
   useShareIntent: jest.fn().mockReturnValue({
     shareIntent: { text: null, webUrl: null, files: null, type: null },
