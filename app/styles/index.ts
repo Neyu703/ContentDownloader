@@ -9,6 +9,7 @@ import { makeChangelogStyles } from "./changelog";
 import { makeCookieImportStyles } from "./cookieImport";
 import { makeBackgroundStyles } from "./background";
 import { makeDisplaySettingsStyles } from "./displaySettings";
+import { makeHistoryStyles } from "./history";
 
 export function makeStyles(
   colors: ThemeColors,
@@ -26,5 +27,6 @@ export function makeStyles(
     ...makeCookieImportStyles(colors),
     ...makeBackgroundStyles(colors),
     ...makeDisplaySettingsStyles(colors),
+    ...makeHistoryStyles(colors),
   });
 }

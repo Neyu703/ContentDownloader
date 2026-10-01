@@ -57,6 +57,9 @@ export function secondaryButtonShape(colors: ThemeColors, scale = 1) {
 
 export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolean) {
   return {
+    // Rendered on a plain View, not SafeAreaView: RN's SafeAreaView is iOS-only (a plain View on
+    // Android anyway), and react-native-web's version overrides this padding with
+    // env(safe-area-inset-*) — i.e. 0, putting the card flush against a phone browser's edges.
     page: {
       flex: 1,
       // Transparent when an animated background is active, so BackgroundLayer (mounted behind the
@@ -64,7 +67,8 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
       backgroundColor: isBackgroundActive ? "transparent" : colors.background,
       alignItems: "center",
       justifyContent: "center",
-      padding: 24,
+      // 16 = the standard compact-window gutter; the card's own padding below adds the rest.
+      padding: 16,
       // web-only: an active background reacts to click-and-drag anywhere on screen, which would
       // otherwise drag-select whatever's underneath the cursor over the empty margin around card.
       // card explicitly opts back into selection below, so its own text is unaffected.
@@ -78,7 +82,7 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
       borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 28,
+      padding: 24,
       // web-only: clips content past maxHeight so the job list's own ScrollView (not this card) is
       // the one scrollable region. NOT on native — jobList isn't flex:1 there (see its own comment),
       // so clipping here would just hide overflowing content with nothing able to scroll to it.
@@ -93,7 +97,7 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
     // rework), so the URL field needs a bit more breathing room above it than the shared card
     // padding gives Settings' own header, or it reads as flush/cramped against the card edge.
     cardHome: {
-      paddingTop: 36,
+      paddingTop: 32,
     },
     twoColumnRow: {
       flexDirection: "row",
@@ -176,7 +180,29 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
     },
     settingsActionChevron: {
       color: colors.textMuted,
-      fontSize: 16,
+      fontSize: 20,
+      lineHeight: 20,
+    },
+    // Groups Settings into titled sections (general / appearance / downloads / about) instead of
+    // one undifferentiated stack.
+    settingsSectionHeader: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: "600",
+      marginTop: 24,
+      marginBottom: 8,
+    },
+    // Settings' content scrolls inside the card on short windows (phone landscape) instead of being
+    // clipped by card's maxHeight — same web-only flex split as jobList (see its comment in jobCard.ts).
+    settingsScroll: {
+      flex: Platform.select({ web: 1, default: undefined }),
+      minHeight: Platform.select({ web: 0, default: undefined }),
+    },
+    // Empty-state call to action (e.g. History with nothing recorded yet) — points to the next step.
+    emptyStateAction: {
+      alignSelf: "center",
+      marginTop: 8,
+      paddingHorizontal: 20,
     },
     errorText: {
       color: colors.danger,
@@ -189,8 +215,8 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
       fontSize: 13,
     },
     legalNotice: {
-      color: colors.textFaint,
-      fontSize: 11,
+      color: colors.textMuted,
+      fontSize: 12,
       textAlign: "center",
       marginTop: 20,
     },

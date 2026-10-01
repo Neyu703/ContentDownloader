@@ -107,13 +107,13 @@ export function makeJobCardStyles(colors: ThemeColors, scale = 1) {
       backgroundColor: colors.accent,
       borderRadius: 4,
     },
-    // The collapsed-by-default core line ("{speed} · noch {eta}", falling back to the phase
-    // label) — fades out once the debug box is expanded, same treatment the old ETA-only badge had.
+    // The collapsed-by-default core line ("{speed} · noch {eta}", omitted when neither is known) —
+    // fades out once the debug box is expanded, same treatment the old ETA-only badge had.
     progressCoreBadge: {
       position: "absolute",
       right: 4,
       top: "50%",
-      transform: [{ translateY: -8 }],
+      transform: [{ translateY: -9 }],
       backgroundColor: BADGE_OVERLAY_BG,
       borderRadius: RADIUS_MD,
       paddingHorizontal: 6 * scale,
@@ -121,7 +121,7 @@ export function makeJobCardStyles(colors: ThemeColors, scale = 1) {
     },
     progressCoreText: {
       color: BADGE_OVERLAY_TEXT,
-      fontSize: 10 * scale,
+      fontSize: 11 * scale,
       fontWeight: "600",
     },
     debugBox: {

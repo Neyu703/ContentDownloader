@@ -87,6 +87,13 @@ export const de = {
   history: {
     title: "Verlauf",
     empty: "Noch keine abgeschlossenen Downloads.",
+    emptyAction: "Ersten Download starten",
+    clearAll: "Verlauf leeren",
+    removeButton: "Entfernen",
+    removeAccessibilityLabel: "„{{title}}“ aus dem Verlauf entfernen",
+    removed_one: "{{count}} Eintrag entfernt",
+    removed_other: "{{count}} Einträge entfernt",
+    undo: "Rückgängig",
     reDownloadButton: "Erneut herunterladen",
   },
   playlist: {
@@ -101,6 +108,10 @@ export const de = {
     confirmNone: "Nichts ausgewählt",
   },
   settings: {
+    sectionGeneral: "Allgemein",
+    sectionAppearance: "Darstellung",
+    sectionDownloads: "Downloads",
+    sectionAbout: "Info",
     title: "Einstellungen",
     language: "Sprache",
     languageSystem: "Systemsprache",

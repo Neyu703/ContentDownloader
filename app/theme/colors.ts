@@ -10,7 +10,10 @@ export interface ThemeColors {
   textSecondary: string;
   textMuted: string;
   textFaint: string;
+  /** Fill for primary buttons/checkboxes/focus rings — dark enough for `onAccent` text at 4.5:1. */
   accent: string;
+  /** Accent used as text on `surface` (active tab label) — lighter than `accent` in dark mode for 4.5:1 there too. */
+  accentText: string;
   /** Background for a selected/active row (e.g. the picked dropdown option). */
   accentSelected: string;
   onAccent: string;
@@ -31,8 +34,9 @@ export const darkColors: ThemeColors = {
   textPrimary: "#f0f0f0",
   textSecondary: "#a0a0a0",
   textMuted: "#888",
-  textFaint: "#666",
-  accent: "#646cff",
+  textFaint: "#7f7f7f",
+  accent: "#5a62f5",
+  accentText: "#8b91ff",
   accentSelected: "#2a2a3a",
   onAccent: "#fff",
   danger: "#ff6b6b",
@@ -51,14 +55,15 @@ export const lightColors: ThemeColors = {
   borderStrong: "#c8c8d0",
   textPrimary: "#1a1a1a",
   textSecondary: "#55555c",
-  textMuted: "#78787f",
-  textFaint: "#9a9aa0",
+  textMuted: "#6b6b72",
+  textFaint: "#74747b",
   accent: "#5459e8",
+  accentText: "#5459e8",
   accentSelected: "#e6e7fb",
   onAccent: "#fff",
   danger: "#c23a3a",
   success: "#248a4d",
   onSuccess: "#fff",
-  buttonDisabled: "#c6c6d6",
+  buttonDisabled: "#8f91c0",
   overlay: "rgba(0,0,0,0.4)",
 };

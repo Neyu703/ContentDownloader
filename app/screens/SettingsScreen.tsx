@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { downloader } from "../downloader";
 import { Dropdown } from "../components/Dropdown";
@@ -102,52 +102,65 @@ export function SettingsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.page}>
+    <View style={styles.page}>
       <View style={styles.card}>
-        <Text style={styles.title}>{translate("settings.title")}</Text>
+        <ScrollView style={styles.settingsScroll}>
+          <Text style={styles.title}>{translate("settings.title")}</Text>
 
-        <Text style={styles.label}>{translate("settings.language")}</Text>
-        <Dropdown options={languageOptions} value={languageSetting} onChange={handleLanguageChange} />
+          <Text style={styles.settingsSectionHeader}>{translate("settings.sectionGeneral")}</Text>
+          <Text style={styles.label}>{translate("settings.language")}</Text>
+          <Dropdown options={languageOptions} value={languageSetting} onChange={handleLanguageChange} />
 
-        <Text style={[styles.label, styles.fieldSpacing]}>{translate("settings.theme")}</Text>
-        <Dropdown options={themeOptions} value={themeSetting} onChange={setThemeSetting} />
+          <Text style={[styles.label, styles.fieldSpacing]}>{translate("settings.theme")}</Text>
+          <Dropdown options={themeOptions} value={themeSetting} onChange={setThemeSetting} />
 
-        {downloader.pickDownloadsFolder && (
-          <>
-            <Text style={[styles.label, styles.fieldSpacing]}>{translate("settings.downloadsFolder")}</Text>
-            <Text style={styles.searchMessage}>{downloadsFolderName ?? translate("settings.downloadsFolderDefault")}</Text>
-            <View style={styles.settingsActions}>
-              <SettingsActionButton
-                label={isPickingFolder ? translate("settings.choosingFolder") : translate("settings.chooseFolderButton")}
-                onPress={handlePickDownloadsFolder}
-                disabled={isPickingFolder}
-              />
-              {downloadsFolderName && (
-                <SettingsActionButton label={translate("settings.resetFolderButton")} onPress={handleResetDownloadsFolder} />
-              )}
-            </View>
-          </>
-        )}
-
-        <View style={[styles.settingsActions, styles.fieldSpacing]}>
-          <SettingsActionButton label={translate("settings.showChangelog")} onPress={() => setIsChangelogVisible(true)} />
-          <SettingsActionButton
-            label={translate("settings.cookieImportButton")}
-            onPress={() => setIsCookieImportVisible(true)}
-          />
-          <SettingsActionButton
-            label={translate("settings.displayButton")}
-            onPress={() => setIsDisplaySettingsVisible(true)}
-          />
-          {backgroundRegistry.length > 0 && (
+          <Text style={styles.settingsSectionHeader}>{translate("settings.sectionAppearance")}</Text>
+          <View style={styles.settingsActions}>
             <SettingsActionButton
-              label={translate("settings.backgroundButton")}
-              onPress={() => setIsBackgroundSettingsVisible(true)}
+              label={translate("settings.displayButton")}
+              onPress={() => setIsDisplaySettingsVisible(true)}
             />
-          )}
-        </View>
+            {backgroundRegistry.length > 0 && (
+              <SettingsActionButton
+                label={translate("settings.backgroundButton")}
+                onPress={() => setIsBackgroundSettingsVisible(true)}
+              />
+            )}
+          </View>
 
-        <Text style={styles.legalNotice}>{translate("settings.legalNotice")}</Text>
+          <Text style={styles.settingsSectionHeader}>{translate("settings.sectionDownloads")}</Text>
+          {downloader.pickDownloadsFolder && (
+            <>
+              <Text style={styles.label}>{translate("settings.downloadsFolder")}</Text>
+              <Text style={styles.searchMessage}>{downloadsFolderName ?? translate("settings.downloadsFolderDefault")}</Text>
+            </>
+          )}
+          <View style={styles.settingsActions}>
+            {downloader.pickDownloadsFolder && (
+              <>
+                <SettingsActionButton
+                  label={isPickingFolder ? translate("settings.choosingFolder") : translate("settings.chooseFolderButton")}
+                  onPress={handlePickDownloadsFolder}
+                  disabled={isPickingFolder}
+                />
+                {downloadsFolderName && (
+                  <SettingsActionButton label={translate("settings.resetFolderButton")} onPress={handleResetDownloadsFolder} />
+                )}
+              </>
+            )}
+            <SettingsActionButton
+              label={translate("settings.cookieImportButton")}
+              onPress={() => setIsCookieImportVisible(true)}
+            />
+          </View>
+
+          <Text style={styles.settingsSectionHeader}>{translate("settings.sectionAbout")}</Text>
+          <View style={styles.settingsActions}>
+            <SettingsActionButton label={translate("settings.showChangelog")} onPress={() => setIsChangelogVisible(true)} />
+          </View>
+
+          <Text style={styles.legalNotice}>{translate("settings.legalNotice")}</Text>
+        </ScrollView>
       </View>
       <ChangelogModal visible={isChangelogVisible} onClose={() => setIsChangelogVisible(false)} />
       <CookieImportModal visible={isCookieImportVisible} onClose={() => setIsCookieImportVisible(false)} />
@@ -156,6 +169,6 @@ export function SettingsScreen() {
         visible={isBackgroundSettingsVisible}
         onClose={() => setIsBackgroundSettingsVisible(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }

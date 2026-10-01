@@ -1,4 +1,4 @@
-import { Animated, Dimensions, Platform } from "react-native";
+import { Animated, Dimensions, Platform, StyleSheet } from "react-native";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
@@ -9,6 +9,7 @@ import * as Sharing from "expo-sharing";
 import { HomeScreen } from "../../screens/HomeScreen";
 import { initI18n } from "../../i18n";
 import type { JobState, PlaylistInfo, SetupState } from "../../downloader/types";
+import { darkColors } from "../../theme/colors";
 
 // HomeScreen renders every label via useTranslation()'s translate(), which otherwise returns the raw key.
 initI18n("de");
@@ -341,8 +342,9 @@ describe("preview debounce", () => {
 });
 
 describe("handleConvert — single video", () => {
-  it("does nothing when the url is blank", async () => {
+  it("disables the download button while the url is blank", async () => {
     await render(<HomeScreen />);
+    expect(screen.getByText("Herunterladen").parent!.props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(screen.getByText("Herunterladen"));
     expect(mockDownloader.enqueue).not.toHaveBeenCalled();
   });
@@ -1106,6 +1108,68 @@ describe("live URL validation banner", () => {
     await fireEvent.changeText(input, "https://youtu.be/a\nhttps://example.com/unsupported");
     expect(screen.queryByText(/erkannt/)).toBeNull();
     expect(screen.queryByText("Nicht unterstützte Plattform")).toBeNull();
+  });
+});
+
+describe("URL field keyboard and focus", () => {
+  const URL_PLACEHOLDER = "Link einfügen (YouTube, TikTok, Instagram, ...)";
+
+  async function pressKey(key: string, shiftKey = false) {
+    const preventDefault = jest.fn();
+    await fireEvent(screen.getByPlaceholderText(URL_PLACEHOLDER), "keyPress", { nativeEvent: { key, shiftKey }, preventDefault });
+    return preventDefault;
+  }
+
+  it("starts the download on Enter (web)", async () => {
+    Platform.OS = "web";
+    await render(<HomeScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://youtu.be/abc");
+    const preventDefault = await pressKey("Enter");
+    expect(preventDefault).toHaveBeenCalled();
+    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalledWith(expect.objectContaining({ url: "https://youtu.be/abc" })));
+  });
+
+  it("swallows Enter without submitting while the url is unsupported (web)", async () => {
+    Platform.OS = "web";
+    await render(<HomeScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://example.com/video");
+    const preventDefault = await pressKey("Enter");
+    expect(preventDefault).toHaveBeenCalled();
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("leaves Shift+Enter and other keys alone so a newline can still be typed (web)", async () => {
+    Platform.OS = "web";
+    await render(<HomeScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://youtu.be/abc");
+    expect(await pressKey("Enter", true)).not.toHaveBeenCalled();
+    expect(await pressKey("a")).not.toHaveBeenCalled();
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("keeps Enter as a plain newline on native", async () => {
+    await render(<HomeScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://youtu.be/abc");
+    expect(await pressKey("Enter")).not.toHaveBeenCalled();
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("highlights the field in the accent color while focused", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText(URL_PLACEHOLDER);
+    await fireEvent(input, "focus");
+    expect(StyleSheet.flatten(screen.getByPlaceholderText(URL_PLACEHOLDER).props.style).borderColor).toBe(darkColors.accent);
+    await fireEvent(input, "blur");
+    expect(StyleSheet.flatten(screen.getByPlaceholderText(URL_PLACEHOLDER).props.style).borderColor).toBe(darkColors.borderStrong);
+  });
+
+  it("hides the video lookup message for an unsupported url", async () => {
+    mockDownloader = makeDownloader({ getVideoInfo: jest.fn(() => new Promise(() => {})), updateJobPreview: jest.fn() });
+    await render(<HomeScreen />);
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://example.com/video");
+    expect(screen.queryByText("Suche Video…")).toBeNull();
+    await fireEvent.changeText(screen.getByPlaceholderText(URL_PLACEHOLDER), "https://youtu.be/abc");
+    expect(screen.getByText("Suche Video…")).toBeTruthy();
   });
 });
 

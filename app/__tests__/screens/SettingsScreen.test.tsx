@@ -216,6 +216,13 @@ describe("SettingsScreen", () => {
     expect(screen.queryByText("Zurücksetzen")).toBeNull();
   });
 
+  it("groups its entries under section headers", async () => {
+    await renderSettings();
+    for (const header of ["Allgemein", "Darstellung", "Downloads", "Info"]) {
+      expect(screen.getByText(header)).toBeTruthy();
+    }
+  });
+
   it("shows the legal notice about content rights", async () => {
     await renderSettings();
     expect(

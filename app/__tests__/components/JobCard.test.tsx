@@ -374,16 +374,16 @@ describe("JobCard — collapsed core line fallback", () => {
     expect(screen.getByText("noch 30s")).toBeTruthy();
   });
 
-  it("falls back to the phase label when neither speed nor eta are visible", async () => {
+  it("drops the badge instead of repeating the phase label when neither speed nor eta are visible", async () => {
     mockDebugFields({ speed: false, eta: false });
     await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
-    expect(screen.getAllByText("Lädt herunter…").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Lädt herunter…")).toHaveLength(1);
   });
 
-  it("falls back to the phase label when neither speed nor eta have data, regardless of field visibility", async () => {
+  it("drops the badge when neither speed nor eta have data, regardless of field visibility", async () => {
     const job: JobState = { ...BASE_JOB, speedMBs: undefined, etaSeconds: null };
     await render(<JobCard job={job} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
-    expect(screen.getAllByText("Lädt herunter…").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Lädt herunter…")).toHaveLength(1);
   });
 });
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Image,
-  SafeAreaView,
   ScrollView,
   View,
   Text,
@@ -9,6 +8,8 @@ import {
   Pressable,
   Platform,
   useWindowDimensions,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useShareIntent } from "expo-share-intent";
@@ -69,6 +70,14 @@ function classifySingleLineUrl(lines: string[]): UrlValidation | null {
   return { platformId: detectPlatformId(targetUrl), isPlaylist: PLAYLIST_URL_PATTERN.test(targetUrl) };
 }
 
+/**
+ * Web only: plain Enter in the URL field starts the download (chat-style), Shift+Enter still
+ * inserts a newline for typing a batch by hand. Native soft keyboards keep their newline Enter.
+ */
+function isSubmitKeyPress(event: NativeSyntheticEvent<TextInputKeyPressEventData & { shiftKey?: boolean }>): boolean {
+  return Platform.OS === "web" && event.nativeEvent.key === "Enter" && !event.nativeEvent.shiftKey;
+}
+
 const DEFAULT_QUALITY: Record<MediaFormat, string> = {
   audio: "320",
   video: "best",
@@ -115,9 +124,11 @@ export function HomeScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [isUrlFocused, setIsUrlFocused] = useState(false);
   const { isSendingLog, sendLog } = useDebugLog(setSubmitError);
   const { preview, isPreviewLoading, getPendingInfo } = usePreview(url);
-  const urlValidation = useMemo(() => classifySingleLineUrl(parseUrlLines(url)), [url]);
+  const urlLines = useMemo(() => parseUrlLines(url), [url]);
+  const urlValidation = useMemo(() => classifySingleLineUrl(urlLines), [urlLines]);
   const isUrlInvalid = urlValidation !== null && urlValidation.platformId === null;
 
   // Re-render on every keystroke and every 1s progress tick (via useNow below) — memoized so
@@ -251,15 +262,13 @@ export function HomeScreen() {
     }
   }
 
+  // Only reachable while isDownloadDisabled is false (button + Enter handler both gate on it).
   async function handleConvert() {
-    const lines = parseUrlLines(url);
-    if (lines.length === 0 || isSubmitting || isPlaylistLoading) return;
-
-    if (lines.length === 1) {
-      await handleSingleConvert(lines[0]);
+    if (urlLines.length === 1) {
+      await handleSingleConvert(urlLines[0]);
       return;
     }
-    await handleBatchConvert(lines);
+    await handleBatchConvert(urlLines);
   }
 
   async function handleSingleConvert(targetUrl: string) {
@@ -333,16 +342,27 @@ export function HomeScreen() {
   }
 
   const isFormBusy = isSubmitting || isPlaylistLoading;
+  // Greyed out until there's something valid to download, instead of a live button that silently no-ops.
+  const isDownloadDisabled = isFormBusy || isUrlInvalid || urlLines.length === 0;
+
+  function handleUrlKeyPress(event: NativeSyntheticEvent<TextInputKeyPressEventData>) {
+    if (!isSubmitKeyPress(event)) return;
+    event.preventDefault();
+    if (!isDownloadDisabled) handleConvert();
+  }
 
   const formSection = (
     <>
       <View style={styles.urlRow}>
         <TextInput
-          style={styles.urlInput}
+          style={[styles.urlInput, isUrlFocused && styles.urlInputFocused]}
           placeholder={translate("home.urlPlaceholder")}
           placeholderTextColor={colors.textFaint}
           value={url}
           onChangeText={setUrl}
+          onKeyPress={handleUrlKeyPress}
+          onFocus={() => setIsUrlFocused(true)}
+          onBlur={() => setIsUrlFocused(false)}
           autoCapitalize="none"
           autoCorrect={false}
           multiline
@@ -367,7 +387,9 @@ export function HomeScreen() {
         </Text>
       )}
       {isPlaylistLoading && <Text style={styles.searchMessage}>{translate("home.loadingPlaylist")}</Text>}
-      {isPreviewLoading && !preview && <Text style={styles.searchMessage}>{translate("home.searchingVideo")}</Text>}
+      {isPreviewLoading && !preview && !isUrlInvalid && (
+        <Text style={styles.searchMessage}>{translate("home.searchingVideo")}</Text>
+      )}
       {preview && (
         <View style={styles.previewCard}>
           {preview.info.thumbnail && (
@@ -396,9 +418,9 @@ export function HomeScreen() {
       </View>
 
       <Pressable
-        style={withFeedback(styles, [styles.downloadFormButton, (isFormBusy || isUrlInvalid) && styles.buttonDisabled])}
+        style={withFeedback(styles, [styles.downloadFormButton, isDownloadDisabled && styles.buttonDisabled])}
         onPress={handleConvert}
-        disabled={isFormBusy || isUrlInvalid}
+        disabled={isDownloadDisabled}
         accessibilityRole="button"
       >
         <Text style={styles.downloadFormButtonText}>
@@ -472,7 +494,7 @@ export function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.page}>
+    <View style={styles.page}>
       <View style={[styles.card, styles.cardHome, useTwoColumnLayout && styles.cardWide]}>
         {isSetupMessagePhase(setup.phase) && (
           <Text style={[styles.searchMessage, setup.phase === "failed" && styles.errorText]}>
@@ -512,6 +534,6 @@ export function HomeScreen() {
         onConfirm={confirmPlaylistDownload}
         onCancel={closePlaylistPicker}
       />
-    </SafeAreaView>
+    </View>
   );
 }

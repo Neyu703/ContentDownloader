@@ -110,8 +110,9 @@ export function JobCard({
   // reasoning as before display preferences existed) — excluded here even when enabled, but its
   // own line above is still gated by the preference once the box is showing for another reason.
   const hasDebugInfo = debugLines.some((line) => line.id !== "runningSince" && line.visible);
-  // Collapsed-view summary next to the progress bar: speed/ETA (whichever the user still has
-  // visible), falling back to the translated phase label once neither applies.
+  // Collapsed-view summary on the progress bar: speed/ETA (whichever the user still has visible).
+  // Null once neither applies — the phase label is already shown right above, so no badge at all
+  // rather than repeating it.
   const coreSpeedValue = debugFields.speed && job.speedMBs != null ? job.speedMBs.toFixed(2) : null;
   const coreEtaValue = debugFields.eta ? etaLabel : null;
   const coreLineText =
@@ -121,7 +122,7 @@ export function JobCard({
         ? translate("jobCard.coreLineSpeedOnly", { speed: coreSpeedValue })
         : coreEtaValue != null
           ? translate("jobCard.coreLineEtaOnly", { eta: coreEtaValue })
-          : translate(`phase.${job.phase}`);
+          : null;
   const statusLabel = (
     <Text style={styles.statusText}>
       {translate(`phase.${job.phase}`)}
@@ -198,16 +199,18 @@ export function JobCard({
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
             </View>
-            <Animated.View
-              style={[
-                styles.progressCoreBadge,
-                { opacity: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
-              ]}
-            >
-              <Text style={styles.progressCoreText} numberOfLines={1}>
-                {coreLineText}
-              </Text>
-            </Animated.View>
+            {coreLineText != null && (
+              <Animated.View
+                style={[
+                  styles.progressCoreBadge,
+                  { opacity: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+                ]}
+              >
+                <Text style={styles.progressCoreText} numberOfLines={1}>
+                  {coreLineText}
+                </Text>
+              </Animated.View>
+            )}
           </View>
           {hasDebugInfo && (
             <Animated.View

@@ -12,9 +12,15 @@ import type { RootTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-/** Renders a tab-bar icon as emoji text sized/colored like react-navigation's built-in icons. */
-function TabBarIcon({ symbol, color, size }: { symbol: string; color: string; size: number }) {
-  return <Text style={{ color, fontSize: size }}>{symbol}</Text>;
+// react-navigation's stock tab item fits a 28px icon box plus a 10px-tall label slot into its 49px
+// bar — on web the label's "normal" line height (~14px) overflows that slot and gets clipped at
+// phone width. Shrinking the icon box to 24 (emoji scaled to match) gives the label room to fit.
+const TAB_ICON_BOX_HEIGHT = 24;
+const TAB_ICON_FONT_SIZE = 20;
+
+/** Renders a tab-bar icon as emoji text, colored like react-navigation's built-in icons. */
+function TabBarIcon({ symbol, color }: { symbol: string; color: string }) {
+  return <Text style={{ color, fontSize: TAB_ICON_FONT_SIZE, lineHeight: TAB_ICON_BOX_HEIGHT }}>{symbol}</Text>;
 }
 
 /** The app's bottom navigator: the download screen, the download history, and Settings. */
@@ -41,9 +47,10 @@ export function RootTabs() {
         // content visibly bleeding through wherever the new screen's content didn't fully cover it.
         animation: "fade",
         tabBarStyle: navigationStyles.tabBar,
-        tabBarActiveTintColor: colors.accent,
+        tabBarActiveTintColor: colors.accentText,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarButton: renderTabBarButton,
+        tabBarIconStyle: { height: TAB_ICON_BOX_HEIGHT },
         sceneStyle: navigationStyles.sceneContainer,
       }}
     >
@@ -52,7 +59,7 @@ export function RootTabs() {
         component={HomeScreen}
         options={{
           title: translate("navigation.home"),
-          tabBarIcon: ({ color, size }) => <TabBarIcon symbol="🏠" color={color} size={size} />,
+          tabBarIcon: ({ color }) => <TabBarIcon symbol="🏠" color={color} />,
         }}
       />
       <Tab.Screen
@@ -60,7 +67,7 @@ export function RootTabs() {
         component={HistoryScreen}
         options={{
           title: translate("navigation.history"),
-          tabBarIcon: ({ color, size }) => <TabBarIcon symbol="🕓" color={color} size={size} />,
+          tabBarIcon: ({ color }) => <TabBarIcon symbol="🕓" color={color} />,
         }}
       />
       <Tab.Screen
@@ -68,7 +75,7 @@ export function RootTabs() {
         component={SettingsScreen}
         options={{
           title: translate("navigation.settings"),
-          tabBarIcon: ({ color, size }) => <TabBarIcon symbol="⚙️" color={color} size={size} />,
+          tabBarIcon: ({ color }) => <TabBarIcon symbol="⚙️" color={color} />,
         }}
       />
     </Tab.Navigator>

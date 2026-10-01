@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { appendHistoryEntries, loadHistory, type HistoryEntry } from "../../lib/downloadHistory";
+import { appendHistoryEntries, loadHistory, removeHistoryEntries, type HistoryEntry } from "../../lib/downloadHistory";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
@@ -123,5 +123,30 @@ describe("appendHistoryEntries", () => {
     expect(stored).toHaveLength(200);
     expect(stored[0].id).toBe("job-1");
     expect(stored[stored.length - 1].id).toBe("job-200");
+  });
+});
+
+describe("appendHistoryEntries ordering", () => {
+  it("slots re-added (older) entries back into completedAt order", async () => {
+    await appendHistoryEntries([makeEntry({ id: "a", completedAt: 1 }), makeEntry({ id: "c", completedAt: 3 })]);
+    await appendHistoryEntries([makeEntry({ id: "b", completedAt: 2 })]);
+    const history = await loadHistory();
+    expect(history.map((entry) => entry.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("removeHistoryEntries", () => {
+  it("removes only the entries with the given ids", async () => {
+    await appendHistoryEntries([makeEntry({ id: "a" }), makeEntry({ id: "b" }), makeEntry({ id: "c" })]);
+    await removeHistoryEntries(["a", "c"]);
+    const history = await loadHistory();
+    expect(history.map((entry) => entry.id)).toEqual(["b"]);
+  });
+
+  it("is a no-op for unknown ids", async () => {
+    await appendHistoryEntries([makeEntry({ id: "a" })]);
+    await removeHistoryEntries(["missing"]);
+    const history = await loadHistory();
+    expect(history.map((entry) => entry.id)).toEqual(["a"]);
   });
 });

@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { noSelect, primaryButtonShape, primaryButtonTextShape, RADIUS_MD, secondaryButtonShape } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
@@ -29,6 +30,13 @@ export function makeFormStyles(colors: ThemeColors, scale = 1) {
       minHeight: 50 * scale,
       maxHeight: 140 * scale,
       textAlignVertical: "top",
+    },
+    // Focus indicator in the app's accent on every platform (native TextInput shows none besides
+    // the caret); on web it also replaces the browser's own off-palette outline, border + outline
+    // together reading as one 2px accent ring.
+    urlInputFocused: {
+      borderColor: colors.accent,
+      ...Platform.select({ web: { outlineStyle: "solid" as const, outlineWidth: 1, outlineColor: colors.accent }, default: {} }),
     },
     pasteButton: {
       backgroundColor: colors.borderStrong,

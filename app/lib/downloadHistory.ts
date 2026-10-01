@@ -53,11 +53,13 @@ const historySetting = createPersistedSetting<HistoryEntry[]>("contentdownloader
 export const loadHistory = historySetting.load;
 
 /**
- * Appends one or more finished jobs as history entries in a single read-modify-write, oldest-
- * first, capped at HISTORY_CAP entries (oldest dropped first). Entries whose id was already
- * recorded are skipped. Batching (rather than one load+save per job) matters here: several jobs
- * can finish in the same downloader notification, and awaiting each call separately would let
- * concurrent reads see the same stale snapshot and overwrite each other's entry.
+ * Adds one or more history entries in a single read-modify-write, kept sorted oldest-first by
+ * completedAt (a stable sort, so freshly finished jobs simply land at the end — and entries
+ * restored by HistoryScreen's undo slot back into their original place), capped at HISTORY_CAP
+ * entries (oldest dropped first). Entries whose id was already recorded are skipped. Batching
+ * (rather than one load+save per job) matters here: several jobs can finish in the same
+ * downloader notification, and awaiting each call separately would let concurrent reads see the
+ * same stale snapshot and overwrite each other's entry.
  */
 export async function appendHistoryEntries(entries: HistoryEntry[]): Promise<void> {
   if (entries.length === 0) return;
@@ -65,5 +67,17 @@ export async function appendHistoryEntries(entries: HistoryEntry[]): Promise<voi
   const recordedIds = new Set(current.map((entry) => entry.id));
   const newEntries = entries.filter((entry) => !recordedIds.has(entry.id));
   if (newEntries.length === 0) return;
-  await historySetting.save([...current, ...newEntries].slice(-HISTORY_CAP));
+  const merged = [...current, ...newEntries].sort((first, second) => first.completedAt - second.completedAt);
+  await historySetting.save(merged.slice(-HISTORY_CAP));
+}
+
+/**
+ * Removes the entries with the given ids in one read-modify-write — by id rather than saving an
+ * empty list for "clear all", so an entry recorded concurrently (a download finishing meanwhile)
+ * survives.
+ */
+export async function removeHistoryEntries(ids: string[]): Promise<void> {
+  const idsToRemove = new Set(ids);
+  const current = await historySetting.load();
+  await historySetting.save(current.filter((entry) => !idsToRemove.has(entry.id)));
 }
