@@ -14,6 +14,11 @@ import { YouTube } from "./YouTube.js";
  * platform's host list matches (or the URL doesn't parse as http/https at all). Deliberately an
  * explicit if/else chain naming each class instead of looping over a class array — a stack trace
  * or "go to definition" then points straight at the concrete platform being constructed.
+ *
+ * Each class's HOSTS list is mirrored (not imported — see that file's own comment for why) in
+ * app/lib/platformDetection.ts for client-side "is this URL supported" checks. Adding/renaming a
+ * host here needs the same edit there — app/__tests__/lib/platformDetection.test.ts asserts the
+ * two stay in sync.
  */
 export function detectPlatform(rawUrl: string): Platform | null {
   const normalizedUrl = normalizeUrl(rawUrl);

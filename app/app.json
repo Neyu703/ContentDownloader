@@ -2,7 +2,7 @@
   "expo": {
     "name": "Content Downloader",
     "slug": "content-downloader",
-    "version": "1.12.5",
+    "version": "1.12.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.contentdownloader.app",
-      "versionCode": 52,
+      "versionCode": 53,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -45,7 +45,14 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["text/plain"],
+          "disableIOS": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

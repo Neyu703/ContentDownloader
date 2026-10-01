@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { useShareIntent } from "expo-share-intent";
 import * as Sharing from "expo-sharing";
 import { useTranslation } from "react-i18next";
 import { downloader } from "../downloader";
@@ -27,6 +28,9 @@ import { PlaylistPickerModal } from "../components/PlaylistPickerModal";
 import { useDebugLog } from "../hooks/useDebugLog";
 import { usePreview } from "../hooks/usePreview";
 import { usePlaylistPicker, type SubmitFn } from "../hooks/usePlaylistPicker";
+import { detectPlatformId, type PlatformId } from "../lib/platformDetection";
+import { SIZE_SCALE_FACTORS } from "../display/displayPreferences";
+import { useDisplayPreferences } from "../display/DisplayPreferencesContext";
 import {
   formatDuration,
   hasPositiveDuration,
@@ -48,6 +52,21 @@ const WIDE_LAYOUT_BREAKPOINT = 700;
 interface QualityOption {
   value: string;
   label: string;
+}
+
+interface UrlValidation {
+  platformId: PlatformId | null;
+  isPlaylist: boolean;
+}
+
+/**
+ * Live feedback for the URL field, evaluated on every keystroke/paste — null while the field is
+ * empty or holds multiple lines (batch paste keeps its own per-line reporting via handleBatchConvert).
+ */
+function classifySingleLineUrl(lines: string[]): UrlValidation | null {
+  if (lines.length !== 1) return null;
+  const targetUrl = lines[0];
+  return { platformId: detectPlatformId(targetUrl), isPlaylist: PLAYLIST_URL_PATTERN.test(targetUrl) };
 }
 
 const DEFAULT_QUALITY: Record<MediaFormat, string> = {
@@ -86,6 +105,8 @@ export function HomeScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t: translate } = useTranslation();
+  const { preferences } = useDisplayPreferences();
+  const formScale = SIZE_SCALE_FACTORS[preferences.formSize];
   const [url, setUrl] = useState("");
   const [format, setFormat] = useState<MediaFormat>("audio");
   const [quality, setQuality] = useState(DEFAULT_QUALITY.audio);
@@ -96,6 +117,8 @@ export function HomeScreen() {
   const [sharingId, setSharingId] = useState<string | null>(null);
   const { isSendingLog, sendLog } = useDebugLog(setSubmitError);
   const { preview, isPreviewLoading, getPendingInfo } = usePreview(url);
+  const urlValidation = useMemo(() => classifySingleLineUrl(parseUrlLines(url)), [url]);
+  const isUrlInvalid = urlValidation !== null && urlValidation.platformId === null;
 
   // Re-render on every keystroke and every 1s progress tick (via useNow below) — memoized so
   // these option lists only rebuild when the language actually changes.
@@ -155,6 +178,24 @@ export function HomeScreen() {
       setSetup(nextSetup);
     });
   }, []);
+
+  const { shareIntent, resetShareIntent } = useShareIntent();
+
+  // A link shared in from another app (e.g. YouTube's "Share" menu, Android only — the hook
+  // no-ops on web): auto-starts the download if the platform is recognized, exactly like a
+  // manually pasted single-line URL would (handleSingleConvert already branches on playlist vs.
+  // single video). An unsupported link is only filled into the field, letting the validation
+  // banner above explain why nothing started.
+  useEffect(() => {
+    if (!shareIntent.webUrl) return;
+    const sharedUrl = shareIntent.webUrl;
+    resetShareIntent();
+    if (detectPlatformId(sharedUrl)) {
+      handleSingleConvert(sharedUrl);
+    } else {
+      setUrl(sharedUrl);
+    }
+  }, [shareIntent]);
 
   // Starts the form with whatever format/quality the user picked last time, instead of always
   // resetting to the hardcoded "Audio/320" default on every launch.
@@ -316,6 +357,15 @@ export function HomeScreen() {
         </Pressable>
       </View>
 
+      {urlValidation && (
+        <Text style={[styles.searchMessage, urlValidation.platformId ? styles.successText : styles.errorText]}>
+          {urlValidation.platformId
+            ? translate(urlValidation.isPlaylist ? "home.urlPlaylistDetected" : "home.urlRecognizedPlatform", {
+                platform: translate(`platforms.${urlValidation.platformId}`),
+              })
+            : translate("home.urlNotSupported")}
+        </Text>
+      )}
       {isPlaylistLoading && <Text style={styles.searchMessage}>{translate("home.loadingPlaylist")}</Text>}
       {isPreviewLoading && !preview && <Text style={styles.searchMessage}>{translate("home.searchingVideo")}</Text>}
       {preview && (
@@ -337,21 +387,21 @@ export function HomeScreen() {
       <View style={styles.optionsRow}>
         <View style={styles.optionsCol}>
           <Text style={styles.label}>{translate("home.formatLabel")}</Text>
-          <Dropdown options={formatOptions} value={format} onChange={handleFormatChange} />
+          <Dropdown options={formatOptions} value={format} onChange={handleFormatChange} scale={formScale} />
         </View>
         <View style={styles.optionsCol}>
           <Text style={styles.label}>{translate("home.qualityLabel")}</Text>
-          <Dropdown options={qualityOptions[format]} value={quality} onChange={handleQualityChange} />
+          <Dropdown options={qualityOptions[format]} value={quality} onChange={handleQualityChange} scale={formScale} />
         </View>
       </View>
 
       <Pressable
-        style={withFeedback(styles, [styles.button, isFormBusy && styles.buttonDisabled])}
+        style={withFeedback(styles, [styles.downloadFormButton, (isFormBusy || isUrlInvalid) && styles.buttonDisabled])}
         onPress={handleConvert}
-        disabled={isFormBusy}
+        disabled={isFormBusy || isUrlInvalid}
         accessibilityRole="button"
       >
-        <Text style={styles.buttonText}>
+        <Text style={styles.downloadFormButtonText}>
           {isPlaylistLoading
             ? translate("home.downloadButtonPlaylistLoading")
             : isSubmitting

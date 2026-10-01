@@ -51,6 +51,7 @@ jest.mock("../changelog/lastSeenVersion", () => ({
 jest.mock("../backgrounds/registry", () => ({ backgroundRegistry: [] }));
 
 // App -> RootTabs -> HomeScreen would otherwise pull in the real (native/web) downloader module.
+// Also subscribed to directly by HistoryRecorder, mounted alongside RootTabs in App.tsx.
 jest.mock("../downloader", () => ({
   downloader: {
     subscribe: jest.fn((listener: (jobs: unknown[], setup: { phase: string; message: string }) => void) => {
@@ -62,6 +63,14 @@ jest.mock("../downloader", () => ({
     clearFinished: jest.fn(),
     getPlaylistInfo: jest.fn(),
   },
+}));
+
+// HomeScreen's share-intent auto-start: no share pending in these App-level tests.
+jest.mock("expo-share-intent", () => ({
+  useShareIntent: jest.fn().mockReturnValue({
+    shareIntent: { text: null, webUrl: null, files: null, type: null },
+    resetShareIntent: jest.fn(),
+  }),
 }));
 
 beforeEach(() => {

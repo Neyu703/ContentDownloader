@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import * as MailComposer from "expo-mail-composer";
+import { useShareIntent } from "expo-share-intent";
 import * as Sharing from "expo-sharing";
 import { HomeScreen } from "../../screens/HomeScreen";
 import { initI18n } from "../../i18n";
@@ -14,6 +15,7 @@ initI18n("de");
 
 jest.mock("expo-clipboard", () => ({ getStringAsync: jest.fn() }));
 jest.mock("expo-mail-composer", () => ({ isAvailableAsync: jest.fn(), composeAsync: jest.fn() }));
+jest.mock("expo-share-intent", () => ({ useShareIntent: jest.fn() }));
 jest.mock("expo-sharing", () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock("expo-constants", () => ({ __esModule: true, default: { expoConfig: { extra: {} } } }));
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -75,6 +77,16 @@ function makeJob(overrides: Partial<JobState> = {}): JobState {
   };
 }
 
+/** Sets what expo-share-intent's hook reports for the next render; defaults to "nothing shared". */
+function mockShareIntent(webUrl: string | null = null) {
+  const resetShareIntent = jest.fn();
+  (useShareIntent as jest.Mock).mockReturnValue({
+    shareIntent: { text: webUrl, webUrl, files: null, type: webUrl ? "weburl" : null },
+    resetShareIntent,
+  });
+  return resetShareIntent;
+}
+
 function makePlaylistInfo(overrides: Partial<PlaylistInfo> = {}): PlaylistInfo {
   return {
     title: "My Playlist",
@@ -91,6 +103,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockDownloader = makeDownloader();
+  mockShareIntent();
   setWindowWidth(400);
   Platform.OS = "ios";
   // JobCard's own expand/collapse animation is already covered by JobCard.test.tsx; stubbing it
@@ -1047,6 +1060,87 @@ describe("layout", () => {
     await render(<HomeScreen />);
     await mockDownloader.push([makeJob({ id: "a", phase: "done" })]);
     expect(screen.getByText("Fertige entfernen")).toBeTruthy();
+  });
+});
+
+describe("live URL validation banner", () => {
+  it("shows nothing for an empty field", async () => {
+    await render(<HomeScreen />);
+    expect(screen.queryByText(/erkannt/)).toBeNull();
+    expect(screen.queryByText("Nicht unterstützte Plattform")).toBeNull();
+  });
+
+  it("shows the recognized-platform message for a supported url", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://youtu.be/abc");
+    expect(screen.getByText("YouTube erkannt")).toBeTruthy();
+  });
+
+  it("shows the playlist-detected message for a supported playlist url", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://youtube.com/playlist?list=PL1");
+    expect(screen.getByText("YouTube · Playlist erkannt")).toBeTruthy();
+  });
+
+  it("shows the unsupported message and disables the download button for an unrecognized url", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://example.com/video");
+    expect(screen.getByText("Nicht unterstützte Plattform")).toBeTruthy();
+    expect(screen.getByText("Herunterladen").parent!.props.accessibilityState.disabled).toBe(true);
+  });
+
+  it("re-enables the download button once the url becomes supported again", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://example.com/video");
+    await fireEvent.changeText(input, "https://youtu.be/abc");
+    expect(screen.getByText("Herunterladen").parent!.props.accessibilityState.disabled).toBe(false);
+  });
+
+  it("shows nothing for multi-line (batch) input, valid or not", async () => {
+    await render(<HomeScreen />);
+    const input = screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)");
+    await fireEvent.changeText(input, "https://youtu.be/a\nhttps://example.com/unsupported");
+    expect(screen.queryByText(/erkannt/)).toBeNull();
+    expect(screen.queryByText("Nicht unterstützte Plattform")).toBeNull();
+  });
+});
+
+describe("share-intent auto-start", () => {
+  it("does nothing when there is no pending share", async () => {
+    mockShareIntent(null);
+    await render(<HomeScreen />);
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("auto-starts a supported single-video link and resets the share intent", async () => {
+    const resetShareIntent = mockShareIntent("https://youtu.be/shared");
+    await render(<HomeScreen />);
+    await waitFor(() => expect(mockDownloader.enqueue).toHaveBeenCalled());
+    expect(mockDownloader.enqueue).toHaveBeenCalledWith(expect.objectContaining({ url: "https://youtu.be/shared" }));
+    expect(resetShareIntent).toHaveBeenCalled();
+  });
+
+  it("routes a supported playlist link through the playlist picker instead of auto-starting", async () => {
+    const getPlaylistInfo = jest.fn().mockResolvedValue(makePlaylistInfo());
+    mockDownloader = makeDownloader({ getPlaylistInfo });
+    mockShareIntent("https://youtube.com/playlist?list=PL1");
+    await render(<HomeScreen />);
+    await waitFor(() => expect(getPlaylistInfo).toHaveBeenCalledWith("https://youtube.com/playlist?list=PL1", 1));
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("fills the url field without starting a job for an unsupported shared link", async () => {
+    const resetShareIntent = mockShareIntent("https://example.com/unsupported");
+    await render(<HomeScreen />);
+    await waitFor(() => expect(resetShareIntent).toHaveBeenCalled());
+    expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)").props.value).toBe(
+      "https://example.com/unsupported"
+    );
+    expect(mockDownloader.enqueue).not.toHaveBeenCalled();
   });
 });
 

@@ -227,6 +227,12 @@ const GhostFibers: FC<GhostFibersProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
+    // Probe first: ogl's own Renderer constructor logs "unable to create webgl context" via
+    // console.error and then crashes (writes to the null gl) if neither context is available.
+    // Checking here skips the background silently instead.
+    const probeCanvas = document.createElement('canvas');
+    if (!probeCanvas.getContext('webgl2') && !probeCanvas.getContext('webgl')) return;
+
     const renderer = new Renderer({
       webgl: 2,
       alpha: false,

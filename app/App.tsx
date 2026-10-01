@@ -7,6 +7,8 @@ import i18n, { initI18n } from "./i18n";
 import { loadLanguageSetting, resolveLanguage } from "./i18n/languagePreference";
 import { checkForVersionUpdate } from "./changelog/lastSeenVersion";
 import { ChangelogModal } from "./components/ChangelogModal";
+import { DisplayPreferencesProvider } from "./display/DisplayPreferencesContext";
+import { HistoryRecorder } from "./downloader/HistoryRecorder";
 import { RootTabs } from "./navigation/RootTabs";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { BackgroundProvider } from "./backgrounds/BackgroundContext";
@@ -34,13 +36,16 @@ export default function App() {
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
         <BackgroundProvider>
-          <SafeAreaProvider>
-            <BackgroundLayer />
-            <NavigationContainer>
-              <RootTabs />
-            </NavigationContainer>
-            <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
-          </SafeAreaProvider>
+          <DisplayPreferencesProvider>
+            <SafeAreaProvider>
+              <BackgroundLayer />
+              <HistoryRecorder />
+              <NavigationContainer>
+                <RootTabs />
+              </NavigationContainer>
+              <ChangelogModal visible={changelogVisible} onClose={() => setChangelogVisible(false)} />
+            </SafeAreaProvider>
+          </DisplayPreferencesProvider>
         </BackgroundProvider>
       </ThemeProvider>
     </I18nextProvider>

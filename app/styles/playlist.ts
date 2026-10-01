@@ -1,4 +1,4 @@
-import { noSelect, modalCard } from "./layout";
+import { modalCard } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
 export function makePlaylistStyles(colors: ThemeColors) {
@@ -31,25 +31,6 @@ export function makePlaylistStyles(colors: ThemeColors) {
     playlistEntryTitle: {
       color: colors.textPrimary,
       fontSize: 13,
-    },
-    checkbox: {
-      width: 22,
-      height: 22,
-      borderRadius: 5,
-      borderWidth: 1,
-      borderColor: colors.borderStrong,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    checkboxChecked: {
-      backgroundColor: colors.accent,
-      borderColor: colors.accent,
-    },
-    checkboxMark: {
-      color: colors.onAccent,
-      fontSize: 14,
-      fontWeight: "700",
-      ...noSelect,
     },
   } as const;
 }

@@ -1,5 +1,19 @@
 import { darkColors } from "../theme/colors";
 import { makeStyles } from "../styles";
+import { makeFormStyles } from "../styles/form";
+import { makeJobCardStyles } from "../styles/jobCard";
+
+describe("makeFormStyles default scale", () => {
+  it("defaults to scale=1 when omitted", () => {
+    expect(makeFormStyles(darkColors).urlInput.fontSize).toBe(15);
+  });
+});
+
+describe("makeJobCardStyles default scale", () => {
+  it("defaults to scale=1 when omitted", () => {
+    expect(makeJobCardStyles(darkColors).jobTitle.fontSize).toBe(14);
+  });
+});
 
 describe("makeStyles().page.backgroundColor", () => {
   it("uses the theme's background color when no background is active", () => {

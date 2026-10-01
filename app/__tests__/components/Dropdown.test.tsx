@@ -55,3 +55,31 @@ describe("Dropdown", () => {
     expect(screen.queryByText("Option B")).toBeNull();
   });
 });
+
+describe("Dropdown — scale prop", () => {
+  // Pressable resolves its (possibly function-valued) `style` prop internally before it reaches
+  // the rendered host node, so by the time RNTL queries it, `.props.style` is already the plain
+  // resolved array — shaped as [buttonStyle, hovered, pressed] (see withFeedback()).
+  function resolvedButtonStyle(button: ReturnType<typeof screen.getByRole>) {
+    const style = button.props.style as [{ padding?: number }, unknown, unknown];
+    return style[0];
+  }
+
+  it("uses the static (unscaled) button/label styles when scale is not provided", async () => {
+    await render(<Dropdown options={OPTIONS} value="a" onChange={jest.fn()} />);
+    expect(resolvedButtonStyle(screen.getByRole("button")).padding).toBe(12);
+    expect(screen.getByText("Option A").props.style.fontSize).toBe(14);
+  });
+
+  it("uses the static (unscaled) styles when scale is exactly 1 (no-op)", async () => {
+    await render(<Dropdown options={OPTIONS} value="a" onChange={jest.fn()} scale={1} />);
+    expect(resolvedButtonStyle(screen.getByRole("button")).padding).toBe(12);
+    expect(screen.getByText("Option A").props.style.fontSize).toBe(14);
+  });
+
+  it("scales both the button padding and label font size when a scale is provided", async () => {
+    await render(<Dropdown options={OPTIONS} value="a" onChange={jest.fn()} scale={2} />);
+    expect(resolvedButtonStyle(screen.getByRole("button")).padding).toBe(24);
+    expect(screen.getByText("Option A").props.style.fontSize).toBe(28);
+  });
+});

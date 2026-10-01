@@ -25,6 +25,17 @@ jest.mock("../../downloader", () => ({
   },
 }));
 
+// HomeScreen's share-intent auto-start: no share pending in these navigation-focused tests.
+jest.mock("expo-share-intent", () => ({
+  useShareIntent: jest.fn().mockReturnValue({
+    shareIntent: { text: null, webUrl: null, files: null, type: null },
+    resetShareIntent: jest.fn(),
+  }),
+}));
+
+// HistoryScreen (History tab) reads the persisted download history on focus.
+jest.mock("../../lib/downloadHistory", () => ({ loadHistory: jest.fn().mockResolvedValue([]) }));
+
 describe("RootTabs", () => {
   it("shows the Home tab's content initially", async () => {
     await render(
@@ -35,14 +46,25 @@ describe("RootTabs", () => {
     expect(screen.getByPlaceholderText("Link einfügen (YouTube, TikTok, Instagram, ...)")).toBeTruthy();
   });
 
-  it("labels the two tabs via i18n", async () => {
+  it("labels the three tabs via i18n", async () => {
     await render(
       <NavigationContainer>
         <RootTabs />
       </NavigationContainer>
     );
     expect(screen.getByText("Start")).toBeTruthy();
+    expect(screen.getByText("Verlauf")).toBeTruthy();
     expect(screen.getByText("Einstellungen")).toBeTruthy();
+  });
+
+  it("switches to the History tab's content when pressed", async () => {
+    await render(
+      <NavigationContainer>
+        <RootTabs />
+      </NavigationContainer>
+    );
+    await fireEvent.press(screen.getByText("Verlauf"));
+    expect(await screen.findByText("Noch keine abgeschlossenen Downloads.")).toBeTruthy();
   });
 
   it("switches to the Settings tab's content when pressed", async () => {

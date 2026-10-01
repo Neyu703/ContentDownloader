@@ -1,6 +1,8 @@
 import { Alert } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { JobCard } from "../../components/JobCard";
+import { useDisplayPreferences } from "../../display/DisplayPreferencesContext";
+import { DEFAULT_DEBUG_FIELDS, type DebugFieldsVisibility } from "../../display/displayPreferences";
 import type { JobState } from "../../downloader/types";
 import { initI18n } from "../../i18n";
 
@@ -12,6 +14,23 @@ initI18n("de");
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
+
+jest.mock("../../display/DisplayPreferencesContext", () => ({ useDisplayPreferences: jest.fn() }));
+
+/** Controls what useDisplayPreferences() returns for the next render — defaults to every debug field visible. */
+function mockDebugFields(overrides: Partial<DebugFieldsVisibility> = {}) {
+  (useDisplayPreferences as jest.Mock).mockReturnValue({
+    preferences: { jobCardSize: "original", formSize: "original", debugFields: { ...DEFAULT_DEBUG_FIELDS, ...overrides } },
+    setJobCardSize: jest.fn(),
+    setFormSize: jest.fn(),
+    setDebugFieldVisible: jest.fn(),
+    setAllDebugFieldsVisible: jest.fn(),
+  });
+}
+
+beforeEach(() => {
+  mockDebugFields();
+});
 
 const BASE_JOB: JobState = {
   id: "1",
@@ -207,11 +226,12 @@ describe("JobCard — estimated final size", () => {
 describe("JobCard — details expand/collapse and debug lines", () => {
   it("toggles isDetailsExpanded on status row press and flips the accessibility label", async () => {
     await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
-    const row = screen.getByLabelText("Details einklappen");
+    // Collapsed by default.
+    const row = screen.getByLabelText("Details ausklappen");
     await fireEvent.press(row);
-    expect(screen.getByLabelText("Details ausklappen")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Details ausklappen"));
     expect(screen.getByLabelText("Details einklappen")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Details einklappen"));
+    expect(screen.getByLabelText("Details ausklappen")).toBeTruthy();
   });
 
   it("shows the downloaded/total MB line only when totalMB is known, with '?' when downloadedMB is unknown", async () => {
@@ -276,6 +296,94 @@ describe("JobCard — details expand/collapse and debug lines", () => {
     expect(screen.queryByTestId("job-debug-box")).toBeNull();
     expect(screen.queryByLabelText("Details ausklappen")).toBeNull();
     expect(screen.queryByLabelText("Details einklappen")).toBeNull();
+  });
+
+  it("hides a field's debug line when the user disabled it, even though its data is present", async () => {
+    mockDebugFields({ progress: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.queryByText(/Fortschritt:/)).toBeNull();
+    expect(screen.getByText(/Geschwindigkeit:/)).toBeTruthy();
+  });
+
+  it("hides the downloaded/estimated-size/eta/raw-status lines when their fields are disabled", async () => {
+    mockDebugFields({ downloaded: false, estimatedSize: false, eta: false, rawStatus: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.queryByText(/Heruntergeladen:/)).toBeNull();
+    expect(screen.queryByText(/Geschätzte Endgröße:/)).toBeNull();
+    expect(screen.queryByText(/ETA:/)).toBeNull();
+    expect(screen.queryByText("[download] 42%")).toBeNull();
+  });
+
+  it("still shows the toggle via a later field even when progress itself has no data", async () => {
+    const job: JobState = { ...BASE_JOB, progress: null };
+    await render(<JobCard job={job} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByTestId("job-debug-box")).toBeTruthy();
+    expect(screen.queryByText(/Fortschritt:/)).toBeNull();
+    expect(screen.getByText(/Heruntergeladen:/)).toBeTruthy();
+  });
+
+  it("still shows the toggle via the raw status line even when every other field has no data", async () => {
+    const job: JobState = {
+      ...BASE_JOB,
+      progress: null,
+      totalMB: undefined,
+      downloadedMB: undefined,
+      speedMBs: undefined,
+      etaSeconds: null,
+      duration: null,
+    };
+    await render(<JobCard job={job} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByTestId("job-debug-box")).toBeTruthy();
+    expect(screen.getByText("[download] 42%")).toBeTruthy();
+  });
+
+  it("cascades through every disabled field down to the last one that still has data", async () => {
+    mockDebugFields({ estimatedSize: false, speed: false, eta: false });
+    const job: JobState = { ...BASE_JOB, progress: null, totalMB: undefined, downloadedMB: undefined };
+    await render(<JobCard job={job} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByTestId("job-debug-box")).toBeTruthy();
+    expect(screen.queryByText(/Geschätzte Endgröße:/)).toBeNull();
+    expect(screen.queryByText(/Geschwindigkeit:/)).toBeNull();
+    expect(screen.queryByText(/ETA:/)).toBeNull();
+    expect(screen.getByText("[download] 42%")).toBeTruthy();
+  });
+
+  it("hides the running-since line only when its own field is disabled", async () => {
+    mockDebugFields({ runningSince: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    await fireEvent.press(screen.getByLabelText("Details ausklappen"));
+    expect(screen.queryByText(/Läuft seit:/)).toBeNull();
+  });
+});
+
+describe("JobCard — collapsed core line fallback", () => {
+  it("shows speed and ETA together when both are visible", async () => {
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByText("1.50 MB/s · noch 30s")).toBeTruthy();
+  });
+
+  it("falls back to speed-only when eta is disabled", async () => {
+    mockDebugFields({ eta: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByText("1.50 MB/s")).toBeTruthy();
+  });
+
+  it("falls back to eta-only when speed is disabled", async () => {
+    mockDebugFields({ speed: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getByText("noch 30s")).toBeTruthy();
+  });
+
+  it("falls back to the phase label when neither speed nor eta are visible", async () => {
+    mockDebugFields({ speed: false, eta: false });
+    await render(<JobCard job={BASE_JOB} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getAllByText("Lädt herunter…").length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the phase label when neither speed nor eta have data, regardless of field visibility", async () => {
+    const job: JobState = { ...BASE_JOB, speedMBs: undefined, etaSeconds: null };
+    await render(<JobCard job={job} now={Date.now()} onCancel={noop} onRetry={noop} onShare={noop} isSharing={false} />);
+    expect(screen.getAllByText("Lädt herunter…").length).toBeGreaterThan(0);
   });
 });
 

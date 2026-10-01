@@ -24,6 +24,37 @@ export function modalCard(colors: ThemeColors) {
   } as const;
 }
 
+// Unscaled (scale=1) shapes match form.ts's original button/secondaryButton exactly, so
+// PlaylistPickerModal/CookieImportModal/ChangelogModal (which share those keys) render
+// unchanged — only the HomeScreen/JobCard-specific scaled variants pass scale != 1.
+export function primaryButtonShape(colors: ThemeColors, scale = 1) {
+  return {
+    backgroundColor: colors.accent,
+    borderRadius: RADIUS_MD,
+    padding: 12 * scale,
+    alignItems: "center",
+  } as const;
+}
+
+export function primaryButtonTextShape(colors: ThemeColors, scale = 1) {
+  return {
+    color: colors.onAccent,
+    fontWeight: "600",
+    fontSize: 15 * scale,
+    ...noSelect,
+  } as const;
+}
+
+export function secondaryButtonShape(colors: ThemeColors, scale = 1) {
+  return {
+    backgroundColor: colors.borderStrong,
+    borderRadius: RADIUS_MD,
+    paddingVertical: 10 * scale,
+    paddingHorizontal: 14 * scale,
+    alignItems: "center",
+  } as const;
+}
+
 export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolean) {
   return {
     page: {
@@ -152,6 +183,11 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
       textAlign: "center",
       fontSize: 13,
     },
+    successText: {
+      color: colors.success,
+      textAlign: "center",
+      fontSize: 13,
+    },
     legalNotice: {
       color: colors.textFaint,
       fontSize: 11,
@@ -173,6 +209,26 @@ export function makeLayoutStyles(colors: ThemeColors, isBackgroundActive: boolea
     },
     interactivePressed: {
       opacity: 0.65,
+    },
+    // Shared checkbox-row indicator — used by PlaylistEntryRow and the display-settings field list.
+    checkbox: {
+      width: 22,
+      height: 22,
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    checkboxChecked: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    checkboxMark: {
+      color: colors.onAccent,
+      fontSize: 14,
+      fontWeight: "700",
+      ...noSelect,
     },
   } as const;
 }

@@ -42,6 +42,13 @@ jest.mock("../../components/BackgroundSettingsModal", () => {
       visible ? <Text onPress={onClose}>background-settings-modal</Text> : null,
   };
 });
+jest.mock("../../components/DisplaySettingsModal", () => {
+  const { Text } = require("react-native");
+  return {
+    DisplaySettingsModal: ({ visible, onClose }: { visible: boolean; onClose: () => void }) =>
+      visible ? <Text onPress={onClose}>display-settings-modal</Text> : null,
+  };
+});
 
 function makeDownloaderWithFolderPicker(overrides: Record<string, jest.Mock> = {}) {
   return {
@@ -257,5 +264,16 @@ describe("SettingsScreen", () => {
     await fireEvent.press(screen.getByText("background-settings-modal"));
 
     expect(screen.queryByText("background-settings-modal")).toBeNull();
+  });
+
+  it("opens and closes the display settings modal", async () => {
+    await renderSettings();
+    expect(screen.queryByText("display-settings-modal")).toBeNull();
+
+    await fireEvent.press(screen.getByText("Anzeige anpassen"));
+    expect(screen.getByText("display-settings-modal")).toBeTruthy();
+
+    await fireEvent.press(screen.getByText("display-settings-modal"));
+    expect(screen.queryByText("display-settings-modal")).toBeNull();
   });
 });

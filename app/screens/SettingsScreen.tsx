@@ -6,6 +6,7 @@ import { Dropdown } from "../components/Dropdown";
 import { ChangelogModal } from "../components/ChangelogModal";
 import { CookieImportModal } from "../components/CookieImportModal";
 import { BackgroundSettingsModal } from "../components/BackgroundSettingsModal";
+import { DisplaySettingsModal } from "../components/DisplaySettingsModal";
 import { backgroundRegistry } from "../backgrounds/registry";
 import i18n, { type SupportedLanguage } from "../i18n";
 import { loadLanguageSetting, resolveLanguage, saveLanguageSetting, type LanguageSetting } from "../i18n/languagePreference";
@@ -42,6 +43,7 @@ export function SettingsScreen() {
   const [isChangelogVisible, setIsChangelogVisible] = useState(false);
   const [isCookieImportVisible, setIsCookieImportVisible] = useState(false);
   const [isBackgroundSettingsVisible, setIsBackgroundSettingsVisible] = useState(false);
+  const [isDisplaySettingsVisible, setIsDisplaySettingsVisible] = useState(false);
   const [downloadsFolderName, setDownloadsFolderName] = useState<string | null>(null);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
 
@@ -133,6 +135,10 @@ export function SettingsScreen() {
             label={translate("settings.cookieImportButton")}
             onPress={() => setIsCookieImportVisible(true)}
           />
+          <SettingsActionButton
+            label={translate("settings.displayButton")}
+            onPress={() => setIsDisplaySettingsVisible(true)}
+          />
           {backgroundRegistry.length > 0 && (
             <SettingsActionButton
               label={translate("settings.backgroundButton")}
@@ -145,6 +151,7 @@ export function SettingsScreen() {
       </View>
       <ChangelogModal visible={isChangelogVisible} onClose={() => setIsChangelogVisible(false)} />
       <CookieImportModal visible={isCookieImportVisible} onClose={() => setIsCookieImportVisible(false)} />
+      <DisplaySettingsModal visible={isDisplaySettingsVisible} onClose={() => setIsDisplaySettingsVisible(false)} />
       <BackgroundSettingsModal
         visible={isBackgroundSettingsVisible}
         onClose={() => setIsBackgroundSettingsVisible(false)}

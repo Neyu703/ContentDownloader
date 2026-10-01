@@ -1,7 +1,13 @@
-import { noSelect, RADIUS_MD } from "./layout";
+import { noSelect, primaryButtonShape, primaryButtonTextShape, RADIUS_MD, secondaryButtonShape } from "./layout";
 import type { ThemeColors } from "../theme/colors";
 
-export function makeFormStyles(colors: ThemeColors) {
+/**
+ * `scale` (from the user's "Formular-Größe" display preference) only widens/enlarges the URL
+ * field, paste button, and the two new `downloadForm*` keys below — `button`/`buttonText`/
+ * `secondaryButton` stay unscaled (scale-independent callers: PlaylistPickerModal,
+ * CookieImportModal, ChangelogModal) so their buttons never change size from this setting.
+ */
+export function makeFormStyles(colors: ThemeColors, scale = 1) {
   return {
     urlRow: {
       flexDirection: "row",
@@ -18,22 +24,22 @@ export function makeFormStyles(colors: ThemeColors) {
       backgroundColor: colors.inputBackground,
       color: colors.textPrimary,
       borderRadius: RADIUS_MD + 2,
-      padding: 14,
-      fontSize: 15,
-      minHeight: 50,
-      maxHeight: 140,
+      padding: 14 * scale,
+      fontSize: 15 * scale,
+      minHeight: 50 * scale,
+      maxHeight: 140 * scale,
       textAlignVertical: "top",
     },
     pasteButton: {
       backgroundColor: colors.borderStrong,
       borderRadius: RADIUS_MD + 2,
-      width: 50,
-      height: 50,
+      width: 50 * scale,
+      height: 50 * scale,
       alignItems: "center",
       justifyContent: "center",
     },
     pasteButtonIcon: {
-      fontSize: 18,
+      fontSize: 18 * scale,
       ...noSelect,
     },
     previewCard: {
@@ -74,27 +80,15 @@ export function makeFormStyles(colors: ThemeColors) {
     optionsCol: {
       flex: 1,
     },
-    button: {
-      backgroundColor: colors.accent,
-      borderRadius: RADIUS_MD,
-      padding: 12,
-      alignItems: "center",
-    },
+    button: { ...primaryButtonShape(colors) },
     buttonDisabled: {
       backgroundColor: colors.buttonDisabled,
     },
-    buttonText: {
-      color: colors.onAccent,
-      fontWeight: "600",
-      fontSize: 15,
-      ...noSelect,
-    },
-    secondaryButton: {
-      backgroundColor: colors.borderStrong,
-      borderRadius: RADIUS_MD,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      alignItems: "center",
-    },
+    buttonText: { ...primaryButtonTextShape(colors) },
+    secondaryButton: { ...secondaryButtonShape(colors) },
+    // HomeScreen-only: the Download button, scaled by "Formular-Größe" (unlike the shared
+    // button/buttonText above, which other screens/modals also render at their fixed size).
+    downloadFormButton: { ...primaryButtonShape(colors, scale) },
+    downloadFormButtonText: { ...primaryButtonTextShape(colors, scale) },
   } as const;
 }

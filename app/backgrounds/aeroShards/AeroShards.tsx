@@ -1706,7 +1706,18 @@ export default function AeroShards({
         setReady(false);
         const resolvedQuality = resolveQuality(canvas);
         const preset = QUALITY_PRESETS[resolvedQuality] || QUALITY_PRESETS.medium;
-        gpu = await init();
+        // vgpu's init() logs directly to console.error when the browser can't provide a WebGPU
+        // context (e.g. no GPU available) — reportFailure below already handles that failure, so
+        // silence the duplicate log for just this call instead of letting it leak to the console.
+        gpu = await (async () => {
+          const originalConsoleError = console.error;
+          console.error = () => {};
+          try {
+            return await init();
+          } finally {
+            console.error = originalConsoleError;
+          }
+        })();
         if (disposed) return gpu.dispose();
         unsubscribeGpuError = gpu.onError(reportFailure);
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, Text, TextInput, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { type JobState } from "../downloader/types";
+import { useDisplayPreferences } from "../display/DisplayPreferencesContext";
 import { useJobSave } from "../hooks/useJobSave";
 import {
   estimateAudioSizeMB,
@@ -43,12 +44,16 @@ export function JobCard({
 }) {
   const styles = useStyles();
   const { t: translate } = useTranslation();
+  const { preferences } = useDisplayPreferences();
+  const debugFields = preferences.debugFields;
   // User-edited filename for a finished job, overriding the auto-picked title — null until touched.
   const [customName, setCustomName] = useState<string | null>(null);
   const { saveState, handleSavePress } = useJobSave(onSave, customName);
-  const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
+  // Collapsed by default — the always-visible core line below (speed/ETA, or the phase label as a
+  // fallback) already gives a glance-worthy summary without the full metadata box.
+  const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
   const [debugBoxHeight, setDebugBoxHeight] = useState(0);
-  const detailsAnim = useRef(new Animated.Value(1)).current;
+  const detailsAnim = useRef(new Animated.Value(0)).current;
   const isFinished = isFinishedPhase(job.phase);
   const isStalled = !isFinished && now - job.updatedAt > STALL_HINT_MS;
   const progressPercent =
@@ -62,15 +67,61 @@ export function JobCard({
   const extLabel = (job.ext ?? "").toUpperCase();
   const errorText = translate(job.errorKey ?? "errors.unknown", job.errorParams);
   const statusText = job.lastLineKey ? translate(job.lastLineKey, job.lastLineParams) : job.lastLine;
-  // "Läuft seit" alone isn't informative enough to justify showing the details toggle — only count
-  // it once there's at least one real data point (progress, size, speed, ETA, or a raw yt-dlp line).
-  const hasDebugInfo =
-    job.progress != null ||
-    job.totalMB != null ||
-    estimatedFinalMB != null ||
-    job.speedMBs != null ||
-    etaLabel != null ||
-    statusText !== "";
+  // One entry per debug field — single source of truth for both "is there anything to show at
+  // all" (hasDebugInfo below) and the actual rendered lines, instead of maintaining the same
+  // per-field visibility conditions in two separate places.
+  const debugLines: { id: string; visible: boolean; text: string; numberOfLines?: number }[] = [
+    {
+      id: "progress",
+      visible: job.progress != null && debugFields.progress,
+      text: translate("jobCard.progressLabel", { percent: job.progress?.toFixed(1) ?? "" }),
+    },
+    {
+      id: "downloaded",
+      visible: job.totalMB != null && debugFields.downloaded,
+      text: translate("jobCard.downloadedLabel", {
+        downloaded: job.downloadedMB != null ? formatMB(job.downloadedMB) : translate("jobCard.downloadedUnknown"),
+        total: job.totalMB != null ? formatMB(job.totalMB) : "",
+      }),
+    },
+    {
+      id: "estimatedSize",
+      visible: estimatedFinalMB != null && debugFields.estimatedSize,
+      text: translate("jobCard.estimatedSizeLabel", { size: estimatedFinalMB != null ? formatMB(estimatedFinalMB) : "" }),
+    },
+    {
+      id: "speed",
+      visible: job.speedMBs != null && debugFields.speed,
+      text: translate("jobCard.speedLabel", { speed: job.speedMBs?.toFixed(2) ?? "" }),
+    },
+    {
+      id: "eta",
+      visible: etaLabel != null && debugFields.eta,
+      text: translate("jobCard.etaLabel", { eta: etaLabel ?? "" }),
+    },
+    {
+      id: "runningSince",
+      visible: debugFields.runningSince,
+      text: translate("jobCard.runningSinceLabel", { elapsed: formatElapsed(now - job.createdAt) }),
+    },
+    { id: "rawStatus", visible: statusText !== "" && debugFields.rawStatus, text: statusText, numberOfLines: 1 },
+  ];
+  // "Running since" alone still isn't informative enough to justify showing the toggle (same
+  // reasoning as before display preferences existed) — excluded here even when enabled, but its
+  // own line above is still gated by the preference once the box is showing for another reason.
+  const hasDebugInfo = debugLines.some((line) => line.id !== "runningSince" && line.visible);
+  // Collapsed-view summary next to the progress bar: speed/ETA (whichever the user still has
+  // visible), falling back to the translated phase label once neither applies.
+  const coreSpeedValue = debugFields.speed && job.speedMBs != null ? job.speedMBs.toFixed(2) : null;
+  const coreEtaValue = debugFields.eta ? etaLabel : null;
+  const coreLineText =
+    coreSpeedValue != null && coreEtaValue != null
+      ? translate("jobCard.coreLineBoth", { speed: coreSpeedValue, eta: coreEtaValue })
+      : coreSpeedValue != null
+        ? translate("jobCard.coreLineSpeedOnly", { speed: coreSpeedValue })
+        : coreEtaValue != null
+          ? translate("jobCard.coreLineEtaOnly", { eta: coreEtaValue })
+          : translate(`phase.${job.phase}`);
   const statusLabel = (
     <Text style={styles.statusText}>
       {translate(`phase.${job.phase}`)}
@@ -147,16 +198,16 @@ export function JobCard({
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
             </View>
-            {etaLabel && (
-              <Animated.View
-                style={[
-                  styles.progressEtaBadge,
-                  { opacity: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
-                ]}
-              >
-                <Text style={styles.progressEtaText}>{etaLabel}</Text>
-              </Animated.View>
-            )}
+            <Animated.View
+              style={[
+                styles.progressCoreBadge,
+                { opacity: detailsAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) },
+              ]}
+            >
+              <Text style={styles.progressCoreText} numberOfLines={1}>
+                {coreLineText}
+              </Text>
+            </Animated.View>
           </View>
           {hasDebugInfo && (
             <Animated.View
@@ -172,30 +223,13 @@ export function JobCard({
                 onLayout={(e) => setDebugBoxHeight(e.nativeEvent.layout.height)}
                 style={styles.debugBox}
               >
-                {job.progress != null && (
-                  <Text style={styles.debugLine}>{translate("jobCard.progressLabel", { percent: job.progress.toFixed(1) })}</Text>
-                )}
-                {job.totalMB != null && (
-                  <Text style={styles.debugLine}>
-                    {translate("jobCard.downloadedLabel", {
-                      downloaded: job.downloadedMB != null ? formatMB(job.downloadedMB) : translate("jobCard.downloadedUnknown"),
-                      total: formatMB(job.totalMB),
-                    })}
-                  </Text>
-                )}
-                {estimatedFinalMB != null && (
-                  <Text style={styles.debugLine}>{translate("jobCard.estimatedSizeLabel", { size: formatMB(estimatedFinalMB) })}</Text>
-                )}
-                {job.speedMBs != null && (
-                  <Text style={styles.debugLine}>{translate("jobCard.speedLabel", { speed: job.speedMBs.toFixed(2) })}</Text>
-                )}
-                {etaLabel && <Text style={styles.debugLine}>{translate("jobCard.etaLabel", { eta: etaLabel })}</Text>}
-                <Text style={styles.debugLine}>{translate("jobCard.runningSinceLabel", { elapsed: formatElapsed(now - job.createdAt) })}</Text>
-                {statusText !== "" && (
-                  <Text style={styles.debugLine} numberOfLines={1}>
-                    {statusText}
-                  </Text>
-                )}
+                {debugLines
+                  .filter((line) => line.visible)
+                  .map((line) => (
+                    <Text key={line.id} style={styles.debugLine} numberOfLines={line.numberOfLines}>
+                      {line.text}
+                    </Text>
+                  ))}
               </View>
             </Animated.View>
           )}
@@ -204,13 +238,13 @@ export function JobCard({
 
       <View style={styles.jobActions}>
         {!isFinished && (
-          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={onCancel} accessibilityRole="button">
-            <Text style={styles.buttonText}>{translate("jobCard.cancel")}</Text>
+          <Pressable style={withFeedback(styles, styles.jobSecondaryButton)} onPress={onCancel} accessibilityRole="button">
+            <Text style={styles.jobSecondaryButtonText}>{translate("jobCard.cancel")}</Text>
           </Pressable>
         )}
         {job.phase === "error" && (
-          <Pressable style={withFeedback(styles, styles.secondaryButton)} onPress={onRetry} accessibilityRole="button">
-            <Text style={styles.buttonText}>{translate("jobCard.tryAgain")}</Text>
+          <Pressable style={withFeedback(styles, styles.jobSecondaryButton)} onPress={onRetry} accessibilityRole="button">
+            <Text style={styles.jobSecondaryButtonText}>{translate("jobCard.tryAgain")}</Text>
           </Pressable>
         )}
         {job.phase === "done" && onSave && (
@@ -230,12 +264,12 @@ export function JobCard({
               </Text>
             </Pressable>
             <Pressable
-              style={withFeedback(styles, styles.secondaryButton)}
+              style={withFeedback(styles, styles.jobSecondaryButton)}
               onPress={() => onShare(customName ?? undefined)}
               disabled={isSharing}
               accessibilityRole="button"
             >
-              <Text style={styles.buttonText}>{isSharing ? translate("jobCard.sharingEllipsis") : translate("jobCard.share")}</Text>
+              <Text style={styles.jobSecondaryButtonText}>{isSharing ? translate("jobCard.sharingEllipsis") : translate("jobCard.share")}</Text>
             </Pressable>
           </>
         )}

@@ -10,7 +10,15 @@ jest.mock("@react-native-async-storage/async-storage", () =>
 
 const FakeBackground = ({ params }: { params: { label: string } }) => <Text>fake-background:{params.label}</Text>;
 
-const mockRegistry: { id: string; labelKey: string; component: typeof FakeBackground }[] = [];
+const CrashingBackground = () => {
+  useEffect(() => {
+    throw new Error("background crashed");
+  }, []);
+  return <Text>crashing-background</Text>;
+};
+
+const mockRegistry: { id: string; labelKey: string; component: typeof FakeBackground | typeof CrashingBackground }[] =
+  [];
 jest.mock("../../backgrounds/registry", () => ({
   get backgroundRegistry() {
     return mockRegistry;
@@ -59,5 +67,18 @@ describe("BackgroundLayer", () => {
       </BackgroundProvider>
     );
     await waitFor(() => expect(screen.getByText("fake-background:hello")).toBeTruthy());
+  });
+
+  it("renders nothing (instead of crashing the app) when the active background throws while mounting", async () => {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    mockRegistry.push({ id: "crashing", labelKey: "background.fakeName", component: CrashingBackground });
+    await render(
+      <BackgroundProvider>
+        <Selector backgroundId="crashing" params={{}} />
+        <BackgroundLayer />
+      </BackgroundProvider>
+    );
+    await waitFor(() => expect(screen.queryByText("crashing-background")).toBeNull());
+    consoleError.mockRestore();
   });
 });

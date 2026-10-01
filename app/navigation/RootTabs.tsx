@@ -2,6 +2,7 @@ import { createBottomTabNavigator, type BottomTabBarButtonProps } from "@react-n
 import { PlatformPressable } from "@react-navigation/elements";
 import { useTranslation } from "react-i18next";
 import { Text } from "react-native";
+import { HistoryScreen } from "../screens/HistoryScreen";
 import { HomeScreen } from "../screens/HomeScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { makeNavigationStyles } from "../styles/navigation";
@@ -16,7 +17,7 @@ function TabBarIcon({ symbol, color, size }: { symbol: string; color: string; si
   return <Text style={{ color, fontSize: size }}>{symbol}</Text>;
 }
 
-/** The app's two-tab bottom navigator: the existing download screen, and the new Settings screen. */
+/** The app's bottom navigator: the download screen, the download history, and Settings. */
 export function RootTabs() {
   const { t: translate } = useTranslation();
   const { colors } = useTheme();
@@ -52,6 +53,14 @@ export function RootTabs() {
         options={{
           title: translate("navigation.home"),
           tabBarIcon: ({ color, size }) => <TabBarIcon symbol="🏠" color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          title: translate("navigation.history"),
+          tabBarIcon: ({ color, size }) => <TabBarIcon symbol="🕓" color={color} size={size} />,
         }}
       />
       <Tab.Screen
