@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: 'Commit SHA to build (defaults to main) — for backfilling APKs onto old releases'
+        description: 'Commit SHA to build (defaults to develop) — for backfilling APKs onto old releases'
         required: false
         type: string
   release:

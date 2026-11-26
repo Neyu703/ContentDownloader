@@ -1,12 +1,12 @@
 ---
 name: ship-feature
-description: Full release pipeline for ContentDownloader — clean up the changes since the last release, run an agent-based review and fix findings, build a release APK for one last local test, then on explicit confirmation push to `main` and cut a GitHub release. Works directly on `main`, no feature branches or PRs. Triggered by "ship it", "feature fertig machen", "release vorbereiten", "ship-feature".
+description: Full release pipeline for ContentDownloader — clean up the changes since the last release, run an agent-based review and fix findings, build a release APK for one last local test, then on explicit confirmation push to `develop` and cut a GitHub release. Works directly on `develop`, no feature branches or PRs. Triggered by "ship it", "feature fertig machen", "release vorbereiten", "ship-feature".
 ---
 
 # Ship Feature
 
-Takes ContentDownloader's current unreleased work on `main` from "code changed" to "released",
-through review and one last local test. Claude and the user work together directly on `main` —
+Takes ContentDownloader's current unreleased work on `develop` from "code changed" to "released",
+through review and one last local test. Claude and the user work together directly on `develop` —
 no feature branches, no PRs. Chains existing skills/tools instead of reimplementing them.
 
 Der gesamte Ablauf läuft auf Deutsch mit dem User (Rückfragen, Statusmeldungen, Zwischenstände) —
@@ -15,8 +15,8 @@ Antwortsprache und Commit-Sprache nie angleichen.
 
 ## Step 0: Preconditions
 
-- `git branch --show-current` — **must be `main`**. This project doesn't use feature branches; if
-  somehow not on `main`, ask before continuing.
+- `git branch --show-current` — **must be `develop`**. This project doesn't use feature branches; if
+  somehow not on `develop`, ask before continuing.
 - `git status --short` — if there's uncommitted work, ask whether to commit it first (via
   [[smart-commit]]) before proceeding.
 - `git describe --tags --abbrev=0` for the last release tag, then `git log <tag>..HEAD --oneline`
@@ -73,7 +73,7 @@ hunts bugs; that's this step's specific job, run last so it sees the already-cle
    continue to the build step until it's fixed.
 
 If any of Steps 1–4 produced file changes, commit them now as a single fix commit directly on
-`main` (follow the commit-message spec in CLAUDE.md §7,
+`develop` (follow the commit-message spec in CLAUDE.md §7,
 `git commit --author="Neyu703 <129206215+Neyu703@users.noreply.github.com>"` per this project's
 CLAUDE.md) — do not leave review fixes uncommitted going into the build step.
 
@@ -90,14 +90,14 @@ CLAUDE.md) — do not leave review fixes uncommitted going into the build step.
 3. Invoke [[build-apk]] to build and deliver the release APK — it handles the
    `gradlew assembleRelease` build, the version-file consistency check, and the Drive naming
    convention; don't reimplement any of that here.
-4. Tell the user the APK is ready to test and **stop here**. Do not push to `main`'s remote, do
+4. Tell the user the APK is ready to test and **stop here**. Do not push to `develop`'s remote, do
    not cut a release, until the user explicitly confirms the local test passed (e.g. "passt",
    "funktioniert", "gut"). A build succeeding is not the same as the user confirming it — wait for
    the actual confirmation message, same as every APK build earlier in this project's history.
 
 ## Step 6: Push — only after Step 5's confirmation, cuts the release automatically
 
-`git push origin main` — all commits from Steps 1–5 go up together once the local test is
+`git push origin develop` — all commits from Steps 1–5 go up together once the local test is
 confirmed. `.github/workflows/auto-prerelease.yml` picks up the version-bump commit from Step 5
 on its own: since it bumps to an `X.0` (minor) version, the workflow tags it and publishes a real
 GitHub Release marked `latest` (not a pre-release) using that commit's own message as the notes.
@@ -109,8 +109,8 @@ running in CI.
 
 ## Rules
 
-- **No feature branches, no PRs.** Everything happens directly on `main`, in commits — this
-  skill's entire job is turning the currently-unreleased commits on `main` into a tested,
+- **No feature branches, no PRs.** Everything happens directly on `develop`, in commits — this
+  skill's entire job is turning the currently-unreleased commits on `develop` into a tested,
   released build.
 - **The Step 5 confirmation gate is not optional** — clean results in Steps 1–4 are not permission
   to skip local device testing before pushing/releasing.

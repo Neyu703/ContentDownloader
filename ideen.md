@@ -304,5 +304,5 @@ bieten und was davon für ContentDownloader übertragbar ist:
 
 **ID-Schema:** `<Abschnitt>-<Nummer>`, z.B. `1-1` = erste Idee in Abschnitt 1.
 
-Checkbox abhaken = Idee ist in `main` umgesetzt — wir arbeiten direkt auf `main`, kein
+Checkbox abhaken = Idee ist in `develop` umgesetzt — wir arbeiten direkt auf `develop`, kein
 Feature-Branch-Workflow, also einfach beim Commit abhaken.

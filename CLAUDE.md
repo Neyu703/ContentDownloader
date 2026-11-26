@@ -79,7 +79,7 @@ own entry — their user-facing changes accumulate into the next `.0` entry. Thi
 in-app changelog modal (`ChangelogModal.tsx`, `SettingsScreen.tsx`) and must never fall behind the
 actual released `X.Y.0` versions.
 
-Every commit that lands on `main` is tagged and released automatically
+Every commit that lands on `develop` is tagged and released automatically
 by `.github/workflows/auto-prerelease.yml`: an `X.0` (minor) version becomes a real GitHub
 **Release** marked `latest`; every other commit (`X.Y.Z` with `Z != 0`) becomes a GitHub
 **pre-release**. Either kind fires `.github/workflows/release-apk.yml` and attaches the
@@ -100,7 +100,7 @@ published` (attaches the APK to that release automatically). Needs four repo sec
 `RELEASE_KEY_PASSWORD`. `build-apk` is the local debug-signed test-build path; this workflow is
 the only source of the real-signed release artifact.
 
-`.github/workflows/auto-prerelease.yml` triggers on every push to `main`. For each new commit in
+`.github/workflows/auto-prerelease.yml` triggers on every push to `develop`. For each new commit in
 the push (walks the whole range, not just the tip — a batch of `smart-commit` commits pushed
 together all get processed) with a version bump, it pushes a `vX.Y.Z` tag and publishes a GitHub
 release using that commit's own message as the release notes — `--latest` for an `X.0` (minor)

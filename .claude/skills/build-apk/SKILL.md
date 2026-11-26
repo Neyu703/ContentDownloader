@@ -79,7 +79,7 @@ after that gets a new patch version through the normal versioning flow instead.
 ## 4. Report
 
 Tell the user the APK is built and where it landed (full path), and its size. Don't push to
-`main`'s remote or cut a GitHub Release as part of this — that's a separate, explicit step (see
+`develop`'s remote or cut a GitHub Release as part of this — that's a separate, explicit step (see
 `ship-feature` for the full pipeline this build step feeds into).
 
 Note: this build always signs with the debug keystore, since `app/android/keystore.properties`
